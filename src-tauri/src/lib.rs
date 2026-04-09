@@ -2,27 +2,36 @@ pub mod datatypes;
 pub mod networking;
 
 use tokio::sync::{mpsc, oneshot, broadcast};
-use datatypes::{WsState, WsRequest};
+use datatypes::{WsState, WsRequest, ClientPayload, ServerPayload};
 use tauri::State;
 
 #[tauri::command]
-async fn login(state: State<'_, WsState>, username: String, password: String) -> Result<(), bool> {
+async fn login(state: State<'_, WsState>, username: String, password: String) -> Result<(), String> {
     let (tx, rx) = oneshot::channel();
-    let msg = String::from(format!("Login by {:?} pass {:?}", username, password));
-    println!("{}", &msg);
+    let msg = ClientPayload::Login {name: username, password: password};
+    println!("{:?}", &msg);
     let request = WsRequest {
         payload: msg,
         response_tx: tx,
     };
 
-    let _ = state.request_tx.send(request).await.map_err(|e| e.to_string());
+    let sent_mess = state.request_tx.send(request).await.map_err(|e| e.to_string());
+    println!("message sent something {:?}", sent_mess);
 
-    let _response = rx.await.map_err(|e| e.to_string());
+    let response = rx.await.map_err(|e| e.to_string());
+    println!("Recieved message to login function: {:?}", response);
+    if let Ok(msg) = response {
+        match msg.payload {
+            ServerPayload::Confirm(valid) => {
+                println!("Server response had a payload with a confirm value of {:?}", valid);
+            }
+        }
+    }
     Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(ws_state: WsState) {
+pub fn run() {
 
     let (request_tx, request_rx) = mpsc::channel(32);
     let (event_tx, _) = broadcast::channel(32);

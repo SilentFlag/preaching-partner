@@ -1,7 +1,9 @@
-use crate::datatypes::{WsEvent,WsRequest,ClientMessage};
+use crate::datatypes::{WsEvent,WsRequest,ClientMessage, ClientPayload, ServerMessage};
+use tokio_tungstenite::tungstenite::Message;
 use tokio::sync::{mpsc, broadcast};
 use tokio_tungstenite::connect_async;
 use futures_util::{SinkExt, StreamExt};
+use std::collections::HashMap;
 
 pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
@@ -19,38 +21,45 @@ pub async fn connect_to_server(
 
     // TODO: RUSTLS ENCRYPTION
 
-    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-    let message = ClientMessage::Login {
-        name: String::from("Ethan"),
-        password: String::from("unset")
-    };
-    let message_bytes = rmp_serde::to_vec(&message).unwrap();
-    write.send(tokio_tungstenite::tungstenite::Message::binary(message_bytes)).await;
-    println!("Sent message");
-
+    let mut current_id: u32 = 1; // Don't start at 0, 0 indicates global message
+    let mut response_senders = HashMap::new();
 
     loop {
         tokio::select! {
             Some(req) = request_rx.recv() => {
-                let _ = write.send(req.payload.clone().into()).await;
-
-                // Wait for response (simple example)
-                if let Some(msg) = read.next().await {
-                    let msg = msg.unwrap().to_string();
-                    let _ = req.response_tx.send(msg);
-                }
+                response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
+                let client_payload: ClientPayload = req.payload.into(); // extract payload
+                let msg: ClientMessage = ClientMessage { // form message to send
+                    id: current_id,
+                    payload: client_payload,
+                };
+                let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
+                let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
+                current_id += 1;
             }
 
             // 🔹 Handle incoming unsolicited messages
             Some(msg) = read.next() => {
-                let msg = msg.unwrap().to_string();
-                let _ = event_tx.send(WsEvent { payload: msg });
+                let coded_msg = msg.unwrap();
+                if let Message::Binary(bin) = coded_msg {
+                    let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
+                    if msg.id == 0 {
+                        let _ = event_tx.send(WsEvent { payload: msg });
+                    } else {
+                        let response_tx = response_senders.remove(&msg.id);
+                        match response_tx {
+                            Some(response_tx) => {
+                                let _ = response_tx.send(msg);
+                            }
+                            _ => {
+                                println!("failed to find response tx for server message");
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-
-    // write.send(tokio_tungstenite::tungstenite::Message::Close(None));
 }
 
 // async fn listen_events(state: State<'_, WsState>) -> Result<(), String> {
