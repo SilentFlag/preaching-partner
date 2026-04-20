@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ministry-manager",
+  "productName": "Preaching Partner",
   "version": "0.1.0",
-  "identifier": "com.ethan.ministry-manager",
+  "identifier": "com.ethan.preaching-partner",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "ministry-manager",
+        "title": "Preaching Partner",
         "width": 800,
         "height": 600
       }
