@@ -20,13 +20,20 @@ async fn login(state: State<'_, WsState>, username: String, password: String) ->
 
     let response = rx.await.map_err(|e| e.to_string());
     println!("Recieved message to login function: {:?}", response);
-    if let Ok(msg) = response {
+    // TODO: handle error case
+    let (refresh_token, access_token) = if let Ok(msg) = response {
         match msg.payload {
-            ServerPayload::Confirm(valid) => {
-                println!("Server response had a payload with a confirm value of {:?}", valid);
+            ServerPayload::ConfirmLogin{success, refresh_token, access_token} => {
+                println!("Server response had a payload with a confirm value of {:?}, {:?}, {:?}", success, refresh_token, access_token);
+                (refresh_token, access_token)
+            }
+            _ => {
+                println!("Unexpected message from server");
+                (None, None)
             }
         }
     }
+    // TODO: store tokens
     Ok(())
 }
 
