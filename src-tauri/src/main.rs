@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    ministry_manager_lib::run();
+    preaching_partner_lib::run();
 }

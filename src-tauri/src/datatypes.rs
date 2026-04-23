@@ -27,6 +27,11 @@ pub enum ServerPayload {
     ConfirmLogin {success: bool, refresh_token: Option<[u8; 32]>, access_token: Option<[u8; 32]>}
 }
 
+#[derive(Serialize, Clone)]
+pub enum FrontendReponse {
+    ConfirmLogin {success: bool, name: String},
+}
+
 pub struct WsState {
     pub request_tx: mpsc::Sender<WsRequest>,
     pub event_tx: broadcast::Sender<WsEvent>,

@@ -4,11 +4,16 @@ use tokio::sync::{mpsc, broadcast};
 use tokio_tungstenite::connect_async;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
+use std::str::FromStr;
+use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
+use crate::{ServerPayload};
 
 pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
     event_tx: broadcast::Sender<WsEvent>
 ) {
+
+    // Create Connection
     let url = String::from("ws://127.0.0.1:9001");
 
     let (ws_stream, _) = connect_async(&url)
@@ -21,14 +26,42 @@ pub async fn connect_to_server(
 
     // TODO: RUSTLS ENCRYPTION
 
-    let mut current_id: u32 = 1; // Don't start at 0, 0 indicates global message
+    // Open database
+    let my_pool_option = SqliteConnectOptions::from_str("sqlite://../database/data.db"); // ----------------- ERROR ------------
+    let conn = match my_pool_option {
+        Ok(my_pool_option) => {
+            let my_pool_option = my_pool_option.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+            let conn = SqlitePool::connect_with(my_pool_option).await;
+            match conn {
+                Ok(conn) => {
+                    conn
+                }
+                Err(error) => {
+                    panic!("Connection to database failed: {:?}", error);
+                }
+            }
+        }
+        Err(error) => {
+            panic!("Database Options Failed: {:?}", error);
+        }
+    };
+    let db = &conn;
+
+    let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
     let mut response_senders = HashMap::new();
+
+    // Core loop
 
     loop {
         tokio::select! {
+            // handle io messages
             Some(req) = request_rx.recv() => {
+                // TODO: Check database for existing data before sending request
+
+                // handle outgoing ws message
                 response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
                 let client_payload: ClientPayload = req.payload.into(); // extract payload
+
                 let msg: ClientMessage = ClientMessage { // form message to send
                     id: current_id,
                     payload: client_payload,
@@ -38,11 +71,46 @@ pub async fn connect_to_server(
                 current_id += 1;
             }
 
-            // 🔹 Handle incoming unsolicited messages
+            // Handle incoming messages
             Some(msg) = read.next() => {
                 let coded_msg = msg.unwrap();
                 if let Message::Binary(bin) = coded_msg {
                     let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
+                    // Check for messages that require db writes
+                    match msg.payload {
+                        ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
+                            // TODO: Handle when empty
+                            // TODO: Refactor  
+                            if let Some(refresh_token_ok) = refresh_token {
+                                let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (true, ?)")
+                                    .bind(hex::encode(refresh_token_ok));
+
+                                let query_result = insert_token_query.execute(db).await;
+
+                                if let Err(result) = query_result {
+                                    // TODO: handle this error
+                                    println!("Something went wrong inserting refresh token into database, error: {:?}", result)
+                                }
+                            }
+
+                            if let Some(access_token_ok) = access_token {
+                                let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (false, ?)")
+                                .bind(hex::encode(access_token_ok));
+
+                                let query_result = insert_token_query.execute(db).await;
+
+                                if let Err(result) = query_result {
+                                    // TODO: handle this error
+                                    println!("Something went wrong inserting refresh token into database, error: {:?}", result)
+                                }
+                            }
+                        }
+                        _ => {
+                            // TODO: Ignore?
+                        }
+                    }
+
+                    // Send response back to original caller
                     if msg.id == 0 {
                         let _ = event_tx.send(WsEvent { payload: msg });
                     } else {

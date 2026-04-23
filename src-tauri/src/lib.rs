@@ -2,11 +2,11 @@ pub mod datatypes;
 pub mod networking;
 
 use tokio::sync::{mpsc, oneshot, broadcast};
-use datatypes::{WsState, WsRequest, ClientPayload, ServerPayload};
-use tauri::State;
+use datatypes::{WsState, WsRequest, ClientPayload, ServerPayload, FrontendReponse};
+use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
-async fn login(state: State<'_, WsState>, username: String, password: String) -> Result<(), String> {
+async fn login(app_handle: AppHandle, state: State<'_, WsState>, username: String, password: String) -> Result<(), String> {
     let (tx, rx) = oneshot::channel();
     let msg = ClientPayload::Login {name: username, password: password};
     println!("{:?}", &msg);
@@ -21,19 +21,34 @@ async fn login(state: State<'_, WsState>, username: String, password: String) ->
     let response = rx.await.map_err(|e| e.to_string());
     println!("Recieved message to login function: {:?}", response);
     // TODO: handle error case
-    let (refresh_token, access_token) = if let Ok(msg) = response {
+    let success = if let Ok(msg) = response {
         match msg.payload {
-            ServerPayload::ConfirmLogin{success, refresh_token, access_token} => {
-                println!("Server response had a payload with a confirm value of {:?}, {:?}, {:?}", success, refresh_token, access_token);
-                (refresh_token, access_token)
+            ServerPayload::ConfirmLogin{success, ..} => {
+                success
             }
             _ => {
+                // TODO: Handle this case
                 println!("Unexpected message from server");
-                (None, None)
+                false
             }
         }
-    }
-    // TODO: store tokens
+    } else {
+        // TODO: handle recieving message fail
+        false
+    };
+
+    // TODO: Send message to frontend (webview)
+    let payload = FrontendReponse::ConfirmLogin {
+        success,
+        name: "Default".to_string(), // or Some(token_string)
+    };
+
+    // TODO: Handle the error rather than crash with ?
+    app_handle
+        .emit("login-result", payload)
+        .map_err(|e| e.to_string())?;
+    
+
     Ok(())
 }
 

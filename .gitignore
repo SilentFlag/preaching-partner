@@ -9,3 +9,8 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vscode
+
+# database files
+/database/*.db
+/database/*.db-shm
+/database/*.db-wal

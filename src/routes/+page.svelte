@@ -1,27 +1,43 @@
 <main class="container">
   <h1>Welcome to Ministry Manager</h1>
   <p>Enter the details provided below to log in.</p>
+  <p id="login-failed" style="color: red;">{login_failed}</p>
   <div class="collumn form" style="margin-top: 2em;">
     <input bind:value={username} id="name-input" type="text" placeholder="Name" />
     <input bind:value={serverAddress} id="server-input" type="text" placeholder="Server Address" />
     <input bind:value={password} id="password-input" type="password" placeholder="Code" />
     <button id="greet-button" onclick={handleLogin}>Log In</button>
-    <a href="./dashboard">dashboard</a>
   </div>
 </main>
 
 <script>
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
 
   let username = $state('username');
   let serverAddress = $state('serverAddress');
   let password = $state('password');
+  let login_failed = $state('');
+
+  listen('login-result', event => {
+    console.log('Received login-result event:', event);
+    const payload = event.payload.ConfirmLogin;
+    const success = payload.success;
+    console.log('login success:', success);
+    console.log('name:', payload.name);
+    if (success) {
+      console.log('Login successful, redirecting to dashboard...');
+      window.location.replace('./dashboard');
+    } else {
+      login_failed = 'Invalid username or password';
+    }
+  });
 
   async function handleLogin() {
 
     try {
       await invoke('login', { username, password });
-      console.log('Login successful');
+      console.log('Login call successful');
     } catch (error) {
       console.error('Login failed', error);
     }
@@ -114,10 +130,6 @@ button {
   :root {
     color: #f6f6f6;
     background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
   }
 
   input,
