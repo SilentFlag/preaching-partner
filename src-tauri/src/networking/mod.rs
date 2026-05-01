@@ -5,6 +5,8 @@ use tokio_tungstenite::connect_async;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use std::str::FromStr;
+use std::fs::File;
+use std::io::Write;
 use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
 use crate::{ServerPayload};
 
@@ -46,6 +48,24 @@ pub async fn connect_to_server(
         }
     };
     let db = &conn;
+
+    // TODO: Sync with server
+    // let sync_success = setup::sync_with_server(&db);
+    // match sync_success {
+    //     Err(_) => {
+    //         // TODO: Warn user of failure to sync
+    //         println!("Failed to sync with server");
+    //     },
+    //     _ => {}
+    // }
+
+
+    let msg: ClientMessage = ClientMessage { // form message to send
+        id: 0,
+        payload: ClientPayload::RequestSync(0),
+    };
+    let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
+    let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
 
     let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
     let mut response_senders = HashMap::new();
@@ -103,6 +123,19 @@ pub async fn connect_to_server(
                                     // TODO: handle this error
                                     println!("Something went wrong inserting refresh token into database, error: {:?}", result)
                                 }
+                            }
+                        }
+                        ServerPayload::MapImage(ref image) => {
+                            // TODO: Save image
+                            println!("Recieved map image from server");
+                            let new_image_file = File::create("../maps/t01.png");
+                            if let Ok(mut image_file) = new_image_file {
+                                let attempt_to_write = image_file.write(image);
+                                if let Ok(_) = attempt_to_write {
+                                    println!("Successfully saved the image");
+                                }
+                            } else {
+                                println!("Failed to create image file");
                             }
                         }
                         _ => {
