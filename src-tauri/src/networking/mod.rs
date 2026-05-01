@@ -1,26 +1,25 @@
-use crate::datatypes::{WsEvent,WsRequest,ClientMessage, ClientPayload, ServerMessage};
-use tokio_tungstenite::tungstenite::Message;
-use tokio::sync::{mpsc, broadcast};
-use tokio_tungstenite::connect_async;
+use crate::datatypes::{
+    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
+};
+use crate::setup::sync_with_server;
 use futures_util::{SinkExt, StreamExt};
+use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::fs::File;
 use std::io::Write;
-use sqlx::{SqlitePool, sqlite::SqliteConnectOptions};
-use crate::{ServerPayload};
+use std::str::FromStr;
+use tokio::sync::{broadcast, mpsc};
+use tokio_tungstenite::connect_async;
+use tokio_tungstenite::tungstenite::Message;
 
 pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
-    event_tx: broadcast::Sender<WsEvent>
+    event_tx: broadcast::Sender<WsEvent>,
 ) {
-
     // Create Connection
     let url = String::from("ws://127.0.0.1:9001");
 
-    let (ws_stream, _) = connect_async(&url)
-        .await
-        .expect("Failed to connect");
+    let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
 
     println!("Connected to server");
 
@@ -35,9 +34,7 @@ pub async fn connect_to_server(
             let my_pool_option = my_pool_option.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
             let conn = SqlitePool::connect_with(my_pool_option).await;
             match conn {
-                Ok(conn) => {
-                    conn
-                }
+                Ok(conn) => conn,
                 Err(error) => {
                     panic!("Connection to database failed: {:?}", error);
                 }
@@ -49,24 +46,8 @@ pub async fn connect_to_server(
     };
     let db = &conn;
 
-    // TODO: Sync with server
-    // let sync_success = setup::sync_with_server(&db);
-    // match sync_success {
-    //     Err(_) => {
-    //         // TODO: Warn user of failure to sync
-    //         println!("Failed to sync with server");
-    //     },
-    //     _ => {}
-    // }
-
-
-    let msg: ClientMessage = ClientMessage { // form message to send
-        id: 0,
-        payload: ClientPayload::RequestSync(0),
-    };
-    let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
-    let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
-
+    let _ = sync_with_server(db, &mut write, &mut read).await;
+    println!("Synced with server");
     let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
     let mut response_senders = HashMap::new();
 
@@ -100,7 +81,7 @@ pub async fn connect_to_server(
                     match msg.payload {
                         ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
                             // TODO: Handle when empty
-                            // TODO: Refactor  
+                            // TODO: Refactor
                             if let Some(refresh_token_ok) = refresh_token {
                                 let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (true, ?)")
                                     .bind(hex::encode(refresh_token_ok));
@@ -125,10 +106,10 @@ pub async fn connect_to_server(
                                 }
                             }
                         }
-                        ServerPayload::MapImage(ref image) => {
+                        ServerPayload::MapImage(ref name, ref image) => {
                             // TODO: Save image
                             println!("Recieved map image from server");
-                            let new_image_file = File::create("../maps/t01.png");
+                            let new_image_file = File::create(format!("../maps/{}.png", name.as_str()));
                             if let Ok(mut image_file) = new_image_file {
                                 let attempt_to_write = image_file.write(image);
                                 if let Ok(_) = attempt_to_write {

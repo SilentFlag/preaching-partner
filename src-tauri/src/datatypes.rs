@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
-use tokio::sync::{mpsc, oneshot, broadcast};
+use serde::{Deserialize, Serialize};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientMessage {
@@ -9,11 +9,11 @@ pub struct ClientMessage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ClientPayload {
-    Login {name: String, password: String},
-    UpdateCheckbox {map: i32, id: i32, checked: bool},
-    UpdateCheckboxDetails {map: i32, id: i32, name: String},
-    SetLowDataMode (bool),
-    RequestSync(u64)
+    Login { name: String, password: String },
+    UpdateCheckbox { map: i32, id: i32, checked: bool },
+    UpdateCheckboxDetails { map: i32, id: i32, name: String },
+    SetLowDataMode(bool),
+    RequestSync(u64),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -25,14 +25,19 @@ pub struct ServerMessage {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerPayload {
-    Confirm (bool),
-    ConfirmLogin {success: bool, refresh_token: Option<[u8; 32]>, access_token: Option<[u8; 32]>},
-    MapImage(Vec<u8>),
+    Confirm(bool),
+    ConfirmLogin {
+        success: bool,
+        refresh_token: Option<[u8; 32]>,
+        access_token: Option<[u8; 32]>,
+    },
+    MapImage(String, Vec<u8>),
+    SyncComplete,
 }
 
 #[derive(Serialize, Clone)]
 pub enum FrontendReponse {
-    ConfirmLogin {success: bool, name: String},
+    ConfirmLogin { success: bool, name: String },
 }
 
 pub struct WsState {
