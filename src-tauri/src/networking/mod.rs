@@ -109,7 +109,7 @@ pub async fn connect_to_server(
                         ServerPayload::MapImage(ref name, ref image) => {
                             // TODO: Save image
                             println!("Recieved map image from server");
-                            let new_image_file = File::create(format!("../maps/{}.png", name.as_str()));
+                            let new_image_file = File::create(format!("../maps/{}", name.as_str()));
                             if let Ok(mut image_file) = new_image_file {
                                 let attempt_to_write = image_file.write(image);
                                 if let Ok(_) = attempt_to_write {
