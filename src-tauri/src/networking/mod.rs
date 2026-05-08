@@ -1,12 +1,10 @@
 use crate::datatypes::{
     ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
 };
-use crate::setup::sync_with_server;
+use crate::setup::{self, sync_with_server};
 use futures_util::{SinkExt, StreamExt};
 use sqlx::{sqlite::SqliteConnectOptions, SqlitePool};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::Write;
 use std::str::FromStr;
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::connect_async;
@@ -77,65 +75,68 @@ pub async fn connect_to_server(
                 let coded_msg = msg.unwrap();
                 if let Message::Binary(bin) = coded_msg {
                     let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
-                    // Check for messages that require db writes
-                    match msg.payload {
-                        ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
-                            // TODO: Handle when empty
-                            // TODO: Refactor
-                            if let Some(refresh_token_ok) = refresh_token {
-                                let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (true, ?)")
-                                    .bind(hex::encode(refresh_token_ok));
+                    let response_msg = msg.clone();
 
-                                let query_result = insert_token_query.execute(db).await;
+                    let timestamp = msg.timestamp;
+                    let timestamp_vec = rmp_serde::to_vec(&timestamp);
+                    match timestamp_vec {
+                        Ok(timestamp_vec) => {
 
-                                if let Err(result) = query_result {
-                                    // TODO: handle this error
-                                    println!("Something went wrong inserting refresh token into database, error: {:?}", result)
+                            // Check for messages that require db writes
+                        match msg.payload {
+                            ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
+                                // TODO: Handle when empty
+                                // TODO: Refactor
+                                if let Some(refresh_token_ok) = refresh_token {
+                                    let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (true, ?)")
+                                        .bind(hex::encode(refresh_token_ok));
+
+                                    let query_result = insert_token_query.execute(db).await;
+
+                                    if let Err(result) = query_result {
+                                        // TODO: handle this error
+                                        println!("Something went wrong inserting refresh token into database, error: {:?}", result)
+                                    }
+                                }
+
+                                if let Some(access_token_ok) = access_token {
+                                    let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (false, ?)")
+                                    .bind(hex::encode(access_token_ok));
+
+                                    let query_result = insert_token_query.execute(db).await;
+
+                                    if let Err(result) = query_result {
+                                        // TODO: handle this error
+                                        println!("Something went wrong inserting refresh token into database, error: {:?}", result)
+                                    }
                                 }
                             }
-
-                            if let Some(access_token_ok) = access_token {
-                                let insert_token_query = sqlx::query("INSERT INTO tokens(refresh, token) VALUES (false, ?)")
-                                .bind(hex::encode(access_token_ok));
-
-                                let query_result = insert_token_query.execute(db).await;
-
-                                if let Err(result) = query_result {
-                                    // TODO: handle this error
-                                    println!("Something went wrong inserting refresh token into database, error: {:?}", result)
-                                }
-                            }
-                        }
-                        ServerPayload::MapImage(ref name, ref image) => {
-                            // TODO: Save image
-                            println!("Recieved map image from server");
-                            let new_image_file = File::create(format!("../maps/{}", name.as_str()));
-                            if let Ok(mut image_file) = new_image_file {
-                                let attempt_to_write = image_file.write(image);
-                                if let Ok(_) = attempt_to_write {
-                                    println!("Successfully saved the image");
-                                }
-                            } else {
-                                println!("Failed to create image file");
-                            }
-                        }
-                        _ => {
-                            // TODO: Ignore?
-                        }
-                    }
-
-                    // Send response back to original caller
-                    if msg.id == 0 {
-                        let _ = event_tx.send(WsEvent { payload: msg });
-                    } else {
-                        let response_tx = response_senders.remove(&msg.id);
-                        match response_tx {
-                            Some(response_tx) => {
-                                let _ = response_tx.send(msg);
+                            ServerPayload::MapImage{..} => {
+                                let _ = setup::save_image(msg.payload, timestamp_vec, db).await;
                             }
                             _ => {
-                                println!("failed to find response tx for server message");
+                                // TODO: Ignore?
                             }
+                            // Send response back to original caller
+                        }
+
+                        if msg.id == 0 {
+                            let _ = event_tx.send(WsEvent { payload: response_msg });
+                        } else {
+                            let response_tx = response_senders.remove(&msg.id);
+                            match response_tx {
+                                Some(response_tx) => {
+                                    let _ = response_tx.send(response_msg);
+                                }
+                                _ => {
+                                    println!("failed to find response tx for server message");
+                                }
+                            }
+                        }
+
+                        }
+                        Err(_) => {
+                            // TODO: Handle this error
                         }
                     }
                 }

@@ -31,7 +31,13 @@ pub enum ServerPayload {
         refresh_token: Option<[u8; 32]>,
         access_token: Option<[u8; 32]>,
     },
-    MapImage(String, Vec<u8>),
+    MapImage {
+        image_name: String,
+        image: Vec<u8>,
+        assignee: u32,
+        assigner: u32,
+        category: u32,
+    },
     SyncComplete,
 }
 

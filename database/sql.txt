@@ -1,0 +1,9 @@
+CREATE TABLE tokens(refresh BOOL, token VARCHAR(255))
+
+CREATE TABLE congregation(id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL);
+
+CREATE TABLE categories(id INTEGER PRIMARY KEY, name VARCHAR(255) NOT NULL, prefix VARCHAR(255) NOT NULL, congregation INTEGER, CONSTRAINT fk_congregation FOREIGN KEY (congregation) REFERENCES congregation(id));
+
+CREATE TABLE users(id INTEGER PRIMARY KEY, firstname VARCHAR(255) NOT NULL, lastname VARCHAR(255) NOT NULL, congregation INTEGER, service_group INTEGER, CONSTRAINT fk_congregation FOREIGN KEY (congregation) REFERENCES congregation(id), CONSTRAINT fk_service_group FOREIGN KEY (service_group) REFERENCES service_group(id));
+
+CREATE TABLE maps(id INTEGER PRIMARY KEY, assignee INT, assigner INT, category INT NOT NULL, file_name VARCHAR(255), updated INTEGER, CONSTRAINT fk_category FOREIGN KEY (category) REFERENCES categories(id));
