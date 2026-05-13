@@ -36,6 +36,8 @@ sqlx = {version = "0.8.6", features = ["sqlite", "runtime-tokio"] }
 
 # Encryption
 rustls = "0.23.37"
+openmls = "0.8.1"
+openmls_rust_crypto = "0.5.1"
 
 # Hashing
 hex = "0.4"
