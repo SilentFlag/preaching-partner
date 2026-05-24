@@ -1,9 +1,11 @@
-pub mod datatypes;
-pub mod user_input;
+mod datatypes;
+mod user;
+mod user_input;
 
 use datatypes::{WsEvent, WsRequest, WsState};
 use futures_util::StreamExt;
 use tokio::sync::{broadcast, mpsc};
+use user::User;
 
 use tokio_tungstenite::connect_async;
 
@@ -41,6 +43,8 @@ async fn core_loop(
     // };
     // let db = &conn;
 
+    let _client: Option<User> = None;
+
     // Loop to check for messages and stuff
     loop {
         tokio::select! {
@@ -55,6 +59,11 @@ async fn core_loop(
             // Handle incoming messages
             Some(_msg) = read.next() => {
                 // TODO: messages from the server
+
+                let _op = "create group team";
+
+
+
             }
         }
     }

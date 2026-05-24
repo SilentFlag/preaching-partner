@@ -1,49 +1,20 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum ClientAction {
+    CheckBox,
+    AssignMap,
+    AddUser,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ClientMessage {
     pub id: u32,
-    pub payload: ClientPayload,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ClientPayload {
-    Login { name: String, password: String },
-    UpdateCheckbox { map: i32, id: i32, checked: bool },
-    UpdateCheckboxDetails { map: i32, id: i32, name: String },
-    SetLowDataMode(bool),
-    RequestSync(u64),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ServerMessage {
-    pub id: u32,
-    pub timestamp: u64,
-    pub payload: ServerPayload,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ServerPayload {
-    Confirm(bool),
-    ConfirmLogin {
-        success: bool,
-        refresh_token: Option<[u8; 32]>,
-        access_token: Option<[u8; 32]>,
-    },
-    MapImage {
-        image_name: String,
-        image: Vec<u8>,
-        assignee: u32,
-        assigner: u32,
-        category: u32,
-    },
-    SyncComplete,
-}
-
-#[derive(Serialize, Clone)]
-pub enum FrontendReponse {
-    ConfirmLogin { success: bool, name: String },
+    pub action_list: Vec<ClientAction>,
+    pub name: String,
+    pub token: Vec<u8>,
+    pub payload: Vec<u8>,
 }
 
 pub struct WsState {
@@ -52,11 +23,11 @@ pub struct WsState {
 }
 
 pub struct WsRequest {
-    pub payload: ClientPayload,
-    pub response_tx: oneshot::Sender<ServerMessage>,
+    pub payload: Vec<u8>,
+    pub response_tx: oneshot::Sender<ClientMessage>,
 }
 
 #[derive(Clone, Debug)]
 pub struct WsEvent {
-    pub payload: ServerMessage,
+    pub payload: ClientMessage,
 }
