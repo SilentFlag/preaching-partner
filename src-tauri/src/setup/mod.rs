@@ -1,5 +1,6 @@
 // TODO: Write code that loads everything, eg check database for tokens then request new refresh token
 
+use crate::database::MyDatabase;
 use crate::datatypes::{ClientMessage, ClientPayload, ServerMessage, ServerPayload};
 use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
@@ -13,13 +14,13 @@ type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type WsSink = SplitSink<WsStream, Message>;
 type WsSource = SplitStream<WsStream>;
 
+/// function to call for a full sync with the server
 pub async fn sync_with_server(
-    db: &sqlx::Pool<sqlx::Sqlite>,
+    db: MyDatabase,
     write: &mut WsSink,
     read: &mut WsSource,
 ) -> Result<bool, bool> {
-    // TODO: sync
-
+    // TODO: Set the time to the last time it has synced rather than a concrete value
     let msg: ClientMessage = ClientMessage {
         // form message to send
         id: 0,
@@ -33,36 +34,43 @@ pub async fn sync_with_server(
     // Loop until recieve a completed sync message
 
     loop {
-        tokio::select! {
-            // Handle incoming messages
-            Some(msg) = read.next() => {
-                let coded_msg = msg.unwrap();
-                if let Message::Binary(bin) = coded_msg {
-                    let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
-                    let timestamp = msg.timestamp;
-                    let timestamp_vec = rmp_serde::to_vec(&timestamp);
-                    match timestamp_vec {
-                        Ok(timestamp_vec) => {
+        if let Some(msg) = read.next().await {
+            let msg: tokio_tungstenite::tungstenite::Message = msg.unwrap();
+            if let Message::Binary(bin) = msg {
+                let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
+                let timestamp = msg.timestamp;
+                let timestamp_vec = rmp_serde::to_vec(&timestamp);
+                match timestamp_vec {
+                    Ok(timestamp_vec) => {
+                        // Check for messages that require db writes
+                        match msg.payload {
+                            ServerPayload::SyncInformation(sync_info) => {
+                                let congregations = sync_info.congregations;
+                                let categories = sync_info.categories;
+                                let service_groups = sync_info.service_groups;
+                                let _users = sync_info.users;
 
-                            // Check for messages that require db writes
-                    match msg.payload {
-                        ServerPayload::MapImage{..} => {
-
-                            let _ = save_image(msg.payload, timestamp_vec, db);
-
-                        }
-                        ServerPayload::SyncComplete => {
-                            break;
-                        }
-                        _ => {
-                            // TODO: Unexpected message, Ignore?
+                                // TODO: Error Handling
+                                for cong in congregations {
+                                    let _ = db.update_congregation(cong);
+                                }
+                                for category in categories {
+                                    let _ = db.update_category(category);
+                                }
+                                for service_group in service_groups {
+                                    let _ = db.update_service_group(service_group);
+                                }
+                            }
+                            ServerPayload::SyncComplete => {
+                                break;
+                            }
+                            _ => {
+                                // TODO: Unexpected message, Ignore?
+                            }
                         }
                     }
-
-                        }
-                        Err(_) => {
-                            // TODO: Handle error
-                        }
+                    Err(_) => {
+                        // TODO: Handle error
                     }
                 }
             }
