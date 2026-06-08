@@ -2,7 +2,7 @@ mod database;
 mod datatypes;
 mod networking;
 mod services;
-mod setup;
+mod sync;
 
 use datatypes::{ClientPayload, FrontendReponse, ServerPayload, WsRequest, WsState};
 use tauri::{AppHandle, Emitter, State};

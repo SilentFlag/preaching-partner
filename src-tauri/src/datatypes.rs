@@ -81,8 +81,9 @@ pub enum AddressTags {
     Custom(String),
 }
 
+// TODO: use
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AddressDetails {
+pub struct _AddressDetails {
     pub id: u32,
     pub map_id: u32,
     pub number: String,
@@ -136,6 +137,7 @@ pub struct SyncInformation {
 }
 
 /// All errors relating to MyDatabase
+/// // TODO: allow last errors once needed
 #[derive(Debug)]
 pub enum DbError {
     InvalidLocation(sqlx::Error),
@@ -144,8 +146,8 @@ pub enum DbError {
     ConnectionFailure(sqlx::Error),
     QueryFailure(sqlx::Error),
     // TokenRngFailure(SysError),
-    AddressFailure(AddressError),
-    UnknownError(sqlx::Error),
+    // AddressFailure(AddressError),
+    // UnknownError(sqlx::Error),
 }
 
 impl fmt::Display for DbError {
@@ -165,41 +167,41 @@ impl fmt::Display for DbError {
             DbError::ConnectionFailure(error) => write!(f, "connection to db failed: {}", error),
             DbError::QueryFailure(error) => write!(f, "a query failed to run: {}", error),
             // DbError::TokenRngFailure(error) => write!(f, "a token failed to generate: {}", error),
-            DbError::AddressFailure(error) => {
-                write!(f, "something went wrong with the addresses: {}", error)
-            }
-            DbError::UnknownError(error) => write!(f, "an unknown error occured: {}", error),
+            // DbError::AddressFailure(error) => {
+            //     write!(f, "something went wrong with the addresses: {}", error)
+            // }
+            // DbError::UnknownError(error) => write!(f, "an unknown error occured: {}", error),
         }
     }
 }
 
-#[derive(Debug)]
-pub enum AddressError {
-    SqlxError(sqlx::Error),
-    DeserialiseError(rmp_serde::decode::Error),
-}
+// #[derive(Debug)]
+// pub enum AddressError {
+//     SqlxError(sqlx::Error),
+//     DeserialiseError(rmp_serde::decode::Error),
+// }
 
-impl From<sqlx::Error> for AddressError {
-    fn from(err: sqlx::Error) -> Self {
-        AddressError::SqlxError(err)
-    }
-}
+// impl From<sqlx::Error> for AddressError {
+//     fn from(err: sqlx::Error) -> Self {
+//         AddressError::SqlxError(err)
+//     }
+// }
 
-impl From<rmp_serde::decode::Error> for AddressError {
-    fn from(err: rmp_serde::decode::Error) -> Self {
-        AddressError::DeserialiseError(err)
-    }
-}
+// impl From<rmp_serde::decode::Error> for AddressError {
+//     fn from(err: rmp_serde::decode::Error) -> Self {
+//         AddressError::DeserialiseError(err)
+//     }
+// }
 
-impl fmt::Display for AddressError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AddressError::DeserialiseError(error) => {
-                write!(f, "something went wrong deserialising the tags: {}", error)
-            }
-            AddressError::SqlxError(error) => {
-                write!(f, "something went wrong with sqlx: {}", error)
-            }
-        }
-    }
-}
+// impl fmt::Display for AddressError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             AddressError::DeserialiseError(error) => {
+//                 write!(f, "something went wrong deserialising the tags: {}", error)
+//             }
+//             AddressError::SqlxError(error) => {
+//                 write!(f, "something went wrong with sqlx: {}", error)
+//             }
+//         }
+//     }
+// }

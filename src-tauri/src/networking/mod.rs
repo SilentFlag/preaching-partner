@@ -3,7 +3,7 @@ use crate::datatypes::{
     ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
 };
 use crate::services::{save_access_token, save_refresh_token};
-use crate::setup::sync_with_server;
+use crate::sync::sync_with_server;
 use futures_util::{SinkExt, StreamExt};
 use std::collections::HashMap;
 use tokio::sync::{broadcast, mpsc};
@@ -29,8 +29,18 @@ pub async fn connect_to_server(
     let db = MyDatabase::new().await;
     match db {
         Ok(db) => {
-            let _ = sync_with_server(db.clone(), &mut write, &mut read).await;
-            println!("Synced with server");
+            // Request to sync after initial setup of db and connection has been established
+            // TODO: Set the time to the last time it has synced rather than a concrete value
+            let msg: ClientMessage = ClientMessage {
+                // form message to send
+                id: 0,
+                payload: ClientPayload::RequestSync(0),
+            };
+            let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
+            let _ = write
+                .send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes))
+                .await; // ERROR DOES GO INTO
+
             let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
             let mut response_senders = HashMap::new();
 
@@ -51,7 +61,7 @@ pub async fn connect_to_server(
                             payload: client_payload,
                         };
                         let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
-                        let _ = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
+                        let _send_message_result = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
                         current_id += 1;
                     }
 
@@ -65,7 +75,7 @@ pub async fn connect_to_server(
                             let timestamp = msg.timestamp;
                             let timestamp_vec = rmp_serde::to_vec(&timestamp);
                             match timestamp_vec {
-                                Ok(timestamp_vec) => {
+                                Ok(_timestamp_vec) => {
 
                                 // Check for messages that require db writes
                                 match msg.payload {
@@ -73,11 +83,17 @@ pub async fn connect_to_server(
 
                                         // TODO: Handle Errors
                                         if let Some(refresh_token_ok) = refresh_token {
-                                            let _ = save_refresh_token(db.clone(), refresh_token_ok);
+                                            let _refresh_result = save_refresh_token(db.clone(), refresh_token_ok).await;
                                         }
 
                                         if let Some(access_token_ok) = access_token {
-                                            let _ = save_access_token(db.clone(), access_token_ok);
+                                            let _access_token_result = save_access_token(db.clone(), access_token_ok).await;
+                                        }
+                                    }
+                                    ServerPayload::SyncInformation(sync_info) => {
+                                        let sync_result = sync_with_server(db.clone(), sync_info).await;
+                                        if let Err(_error) = sync_result {
+                                            // TODO: handle error
                                         }
                                     }
                                     _ => {
