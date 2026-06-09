@@ -1,4 +1,4 @@
-CREATE TABLE tokens(refresh BOOL, token VARCHAR(255))
+CREATE TABLE tokens(refresh BOOL, token VARCHAR(255));
 
 CREATE TABLE congregation(id INTEGER, name VARCHAR(255) NOT NULL, updated INTEGER);
 

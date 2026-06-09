@@ -3,6 +3,7 @@ mod datatypes;
 mod networking;
 mod services;
 mod sync;
+// mod user_input;
 
 use datatypes::{ClientPayload, FrontendReponse, ServerPayload, WsRequest, WsState};
 use tauri::{AppHandle, Emitter, State};

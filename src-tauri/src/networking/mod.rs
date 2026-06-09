@@ -63,14 +63,19 @@ pub async fn connect_to_server(
                         let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
                         let _send_message_result = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
                         current_id += 1;
+
+                        println!("Sent server message")
                     }
 
                     // Handle incoming messages
                     Some(msg) = read.next() => {
-                        let coded_msg = msg.unwrap();
+                        let coded_msg = msg.expect("Something went wrong reading the next message from the server");
+                        println!("read message from server");
                         if let Message::Binary(bin) = coded_msg {
-                            let msg: ServerMessage = rmp_serde::from_slice(&bin).unwrap();
+                            let msg: ServerMessage = rmp_serde::from_slice(&bin).expect("Something went wrong decoding message");
+
                             let response_msg = msg.clone();
+                            println!("\n Response from server: {:?} \n", msg.clone());
 
                             let timestamp = msg.timestamp;
                             let timestamp_vec = rmp_serde::to_vec(&timestamp);
@@ -78,6 +83,7 @@ pub async fn connect_to_server(
                                 Ok(_timestamp_vec) => {
 
                                 // Check for messages that require db writes
+                                // TODO: unsure why the message being unknown_error crashes it
                                 match msg.payload {
                                     ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
 
@@ -97,13 +103,15 @@ pub async fn connect_to_server(
                                         }
                                     }
                                     _ => {
-                                        // TODO: Ignore?
+                                        // TODO: handle unexpected message
+                                        continue;
                                     }
                                     // Send response back to original caller
                                 }
 
                                 if msg.id == 0 {
-                                    let _ = event_tx.send(WsEvent { payload: response_msg });
+                                    let send_results = event_tx.send(WsEvent { payload: response_msg });
+                                    println!("failed to send message: {:?}", send_results);
                                 } else {
                                     let response_tx = response_senders.remove(&msg.id);
                                     match response_tx {
@@ -111,6 +119,7 @@ pub async fn connect_to_server(
                                             let _ = response_tx.send(response_msg);
                                         }
                                         _ => {
+                                            // TODO: handle error
                                             println!("failed to find response tx for server message");
                                         }
                                     }
@@ -119,8 +128,11 @@ pub async fn connect_to_server(
                                 }
                                 Err(_) => {
                                     // TODO: Handle this error
+                                    println!("failed to manage timestamp")
                                 }
                             }
+                        } else {
+                            println!("Message was not binary");
                         }
                     }
                 }

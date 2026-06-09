@@ -40,8 +40,22 @@ pub enum ServerPayload {
         assigner: u32,
         category: u32,
     },
+    SyncCong {
+        cong_id: u32,
+        cong_name: String,
+        remove: bool,
+    },
+    SyncGroup {
+        id: u32,
+        name: String,
+        cong: u32,
+        elder: u32,
+        updated: u64,
+        deleted: bool,
+    },
     SyncInformation(SyncInformation),
     SyncComplete,
+    UnknownError,
 }
 
 #[derive(Serialize, Clone)]
