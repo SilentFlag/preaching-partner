@@ -138,53 +138,53 @@ async fn sync_users(users: Vec<UserPublicDetails>, db: MyDatabase) -> Result<(),
     Ok(())
 }
 
-async fn _save_image(
-    image_payload: ServerPayload,
-    timestamp: Vec<u8>,
-    db: &sqlx::Pool<sqlx::Sqlite>,
-) -> Result<(), ()> {
-    match image_payload {
-        ServerPayload::MapImage {
-            image_name,
-            image,
-            assignee,
-            assigner,
-            category,
-        } => {
-            let new_image_file = File::create(format!("../maps/{}", image_name.as_str()));
-            if let Ok(mut image_file) = new_image_file {
-                let attempt_to_write = image_file.write(&image);
-                if let Ok(_) = attempt_to_write {
-                    println!("Successfully saved the image");
-                }
-            } else {
-                println!("Failed to create image file");
-            }
+// async fn _save_image(
+//     image_payload: ServerPayload,
+//     timestamp: Vec<u8>,
+//     db: &sqlx::Pool<sqlx::Sqlite>,
+// ) -> Result<(), ()> {
+//     match image_payload {
+//         ServerPayload::MapImage {
+//             image_name,
+//             image,
+//             assignee,
+//             assigner,
+//             category,
+//         } => {
+//             let new_image_file = File::create(format!("../maps/{}", image_name.as_str()));
+//             if let Ok(mut image_file) = new_image_file {
+//                 let attempt_to_write = image_file.write(&image);
+//                 if let Ok(_) = attempt_to_write {
+//                     println!("Successfully saved the image");
+//                 }
+//             } else {
+//                 println!("Failed to create image file");
+//             }
 
-            // TODO: Save to database
+//             // TODO: Save to database
 
-            let insert_image_query = sqlx::query(
-        "INSERT INTO maps(assignee, assigner, category, file_name, updated) VALUES (?,?,?,?,?,?)",
-    )
-    .bind(assignee)
-    .bind(assigner)
-    .bind(category)
-    .bind(hex::encode(image_name))
-    .bind(hex::encode(timestamp));
+//             let insert_image_query = sqlx::query(
+//         "INSERT INTO maps(assignee, assigner, category, file_name, updated) VALUES (?,?,?,?,?,?)",
+//     )
+//     .bind(assignee)
+//     .bind(assigner)
+//     .bind(category)
+//     .bind(hex::encode(image_name))
+//     .bind(hex::encode(timestamp));
 
-            let query_result = insert_image_query.execute(db).await;
+//             let query_result = insert_image_query.execute(db).await;
 
-            if let Err(result) = query_result {
-                // TODO: handle this error
-                println!(
-                    "Something went wrong inserting refresh token into database, error: {:?}",
-                    result
-                )
-            }
-            return Ok(());
-        }
-        _ => {
-            return Err(());
-        }
-    }
-}
+//             if let Err(result) = query_result {
+//                 // TODO: handle this error
+//                 println!(
+//                     "Something went wrong inserting refresh token into database, error: {:?}",
+//                     result
+//                 )
+//             }
+//             return Ok(());
+//         }
+//         _ => {
+//             return Err(());
+//         }
+//     }
+// }
