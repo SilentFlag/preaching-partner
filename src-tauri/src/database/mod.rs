@@ -1,6 +1,6 @@
-use crate::datatypes::{CategoryDetails, CongDetails, DbError, GroupDetails};
+use crate::datatypes::{CategoryDetails, CongDetails, DbError, GroupDetails, UserPublicDetails};
 use sqlx::{sqlite::SqliteConnectOptions, sqlite::SqliteRow, Pool, Row, Sqlite, SqlitePool};
-use std::str::FromStr;
+use std::{fmt::format, str::FromStr};
 
 #[derive(Clone)]
 pub struct MyDatabase {
@@ -82,7 +82,7 @@ impl MyDatabase {
     pub async fn add_congregation(&self, cong: CongDetails) -> Result<(), DbError> {
         let updated_vec = rmp_serde::to_vec(&cong.updated).expect("TODO: Handle this error");
         let insert_token_query =
-            sqlx::query("INSERT INTO congregation(id, name, udpated) VALUES (?, ?, ?)")
+            sqlx::query("INSERT INTO congregation(id, name, updated) VALUES (?, ?, ?)")
                 .bind(cong.cong_id)
                 .bind(cong.cong_name)
                 .bind(hex::encode(hex::encode(updated_vec)));
@@ -142,11 +142,11 @@ impl MyDatabase {
         let updated_vec = rmp_serde::to_vec(&category.updated).expect("TODO: Handle this error");
         let insert_token_query =
             sqlx::query("INSERT INTO categories(id, name, prefix, congregation, updated) VALUES (?, ?, ?, ?, ?)")
-                .bind(category.id)
-                .bind(category.name)
-                .bind(category.prefix)
-                .bind(category.congregation)
-                .bind(hex::encode(updated_vec));
+        .bind(category.id)
+        .bind(category.name.clone())
+        .bind(category.prefix.clone())
+        .bind(category.congregation)
+        .bind(hex::encode(updated_vec));
 
         let query_result = insert_token_query.execute(&self.data).await;
 
@@ -245,13 +245,66 @@ impl MyDatabase {
 
     // ------------------- USERS -------------
 
+    pub async fn get_user(&self, id: u32) -> Result<UserPublicDetails, DbError> {
+        let query = sqlx::query("SELECT * FROM users WHERE id = ?").bind(&id);
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        match rows_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let user_details_result = user_row_to_details(&rows[0]);
+                    match user_details_result {
+                        Ok(details) => return Ok(details),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                    // return Ok(user_id);
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+    }
+
+    pub async fn add_user(&self, details: UserPublicDetails) -> Result<(), DbError> {
+        let insert_token_query = sqlx::query("INSERT INTO users(id, name) VALUES (?, ?)")
+            .bind(details.id)
+            .bind(details.name)
+            .bind(details.cong);
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
+    pub async fn update_user(&self, details: UserPublicDetails) -> Result<(), DbError> {
+        let insert_token_query = if details.deleted {
+            sqlx::query("DELETE FROM users WHERE id = ?").bind(details.id)
+        } else {
+            sqlx::query("UPDATE users SET name = ? WHERE id = ?")
+                .bind(details.name)
+                .bind(details.id)
+        };
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
     // ------------------- ADDRESSES -------------
 }
 
 fn cong_row_to_details(row: &SqliteRow) -> Result<CongDetails, sqlx::Error> {
-    let cong_id: u32 = row.try_get("congregation_id")?;
+    let cong_id: u32 = row.try_get("id")?;
     let cong_name: String = row.try_get("name")?;
-    let updated: u64 = row.try_get("updated")?;
+    let updated: u32 = row.try_get("updated")?;
     Ok(CongDetails {
         cong_id,
         cong_name,
@@ -301,9 +354,9 @@ fn group_row_to_details(row: &SqliteRow) -> Result<GroupDetails, sqlx::Error> {
     let name: String = row.try_get("name")?;
     let cong: u32 = row.try_get("congregation")?;
     let elder: u32 = row.try_get("elder")?;
-    let group_updated: u64 = row.try_get("group_updated")?;
-    let pair_updated: u64 = row.try_get("pair_updated")?;
-    let updated: u64 = if group_updated > pair_updated {
+    let group_updated: u32 = row.try_get("group_updated")?;
+    let pair_updated: u32 = row.try_get("pair_updated")?;
+    let updated: u32 = if group_updated > pair_updated {
         group_updated
     } else {
         pair_updated
@@ -318,5 +371,17 @@ fn group_row_to_details(row: &SqliteRow) -> Result<GroupDetails, sqlx::Error> {
         updated,
         group_deleted,
         pair_deleted,
+    })
+}
+
+fn user_row_to_details(row: &SqliteRow) -> Result<UserPublicDetails, sqlx::Error> {
+    let id = row.try_get("id")?;
+    let name: String = row.try_get("name")?;
+    let cong: u32 = row.try_get("congregation")?;
+    Ok(UserPublicDetails {
+        id,
+        name,
+        cong,
+        deleted: false,
     })
 }

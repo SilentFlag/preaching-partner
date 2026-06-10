@@ -29,20 +29,21 @@ pub async fn connect_to_server(
     let db = MyDatabase::new().await;
     match db {
         Ok(db) => {
+            let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
+            let mut response_senders = HashMap::new();
+
             // Request to sync after initial setup of db and connection has been established
             // TODO: Set the time to the last time it has synced rather than a concrete value
             let msg: ClientMessage = ClientMessage {
                 // form message to send
-                id: 0,
+                id: 1,
                 payload: ClientPayload::RequestSync(0),
             };
             let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
             let _ = write
                 .send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes))
                 .await; // ERROR DOES GO INTO
-
-            let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
-            let mut response_senders = HashMap::new();
+            println!("sent sync request");
 
             // Core loop
 
@@ -110,8 +111,8 @@ pub async fn connect_to_server(
                                 }
 
                                 if msg.id == 0 {
-                                    let send_results = event_tx.send(WsEvent { payload: response_msg });
-                                    println!("failed to send message: {:?}", send_results);
+                                    // let send_results = event_tx.send(WsEvent { payload: response_msg });
+                                    // println!("failed to send message: {:?}", send_results);
                                 } else {
                                     let response_tx = response_senders.remove(&msg.id);
                                     match response_tx {
