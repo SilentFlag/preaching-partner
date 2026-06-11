@@ -1,6 +1,9 @@
-use crate::datatypes::{CategoryDetails, CongDetails, DbError, GroupDetails, UserPublicDetails};
+use crate::datatypes::{
+    AddressDetails, AddressError, AddressTags, CategoryDetails, CongDetails, DbError, GroupDetails,
+    MapDetails, StreetDetails, UserPublicDetails,
+};
 use sqlx::{sqlite::SqliteConnectOptions, sqlite::SqliteRow, Pool, Row, Sqlite, SqlitePool};
-use std::{fmt::format, str::FromStr};
+use std::str::FromStr;
 
 #[derive(Clone)]
 pub struct MyDatabase {
@@ -243,6 +246,88 @@ impl MyDatabase {
 
     // ------------------- MAPS -------------
 
+    pub async fn get_map(&self, id: u32) -> Result<MapDetails, DbError> {
+        let query = sqlx::query("SELECT * FROM maps WHERE id = ?").bind(&id);
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        match rows_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let user_details_result = map_row_to_details(&rows[0]);
+                    match user_details_result {
+                        Ok(details) => return Ok(details),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                    // return Ok(user_id);
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+    }
+
+    pub async fn add_map(
+        &self,
+        MapDetails {
+            id,
+            image_name,
+            assignee,
+            assigner,
+            image: _,
+            category,
+            deleted: _,
+        }: &MapDetails,
+    ) -> Result<(), DbError> {
+        let insert_token_query = sqlx::query(
+            "INSERT INTO maps(id, assignee, assigner, category, file_name) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(id)
+        .bind(assignee)
+        .bind(assigner)
+        .bind(category)
+        .bind(image_name);
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
+    pub async fn update_map(
+        &self,
+        MapDetails {
+            id,
+            image_name,
+            assignee,
+            assigner,
+            image: _,
+            category,
+            deleted,
+        }: &MapDetails,
+    ) -> Result<(), DbError> {
+        let insert_token_query = if *deleted {
+            sqlx::query("DELETE FROM maps WHERE id = ?").bind(id)
+        } else {
+            sqlx::query("UPDATE maps SET image_name = ?, assignee = ?, assigner = ?, category = ? WHERE id = ?")
+                .bind(image_name)
+                .bind(assignee)
+                .bind(assigner)
+                .bind(category)
+                .bind(id)
+        };
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
     // ------------------- USERS -------------
 
     pub async fn get_user(&self, id: u32) -> Result<UserPublicDetails, DbError> {
@@ -270,8 +355,7 @@ impl MyDatabase {
     pub async fn add_user(&self, details: UserPublicDetails) -> Result<(), DbError> {
         let insert_token_query = sqlx::query("INSERT INTO users(id, name) VALUES (?, ?)")
             .bind(details.id)
-            .bind(details.name)
-            .bind(details.cong);
+            .bind(details.name);
 
         let query_result = insert_token_query.execute(&self.data).await;
 
@@ -298,7 +382,129 @@ impl MyDatabase {
         Ok(())
     }
 
+    // ------------------- STREETS -------------
+
+    pub async fn get_street(&self, id: u32) -> Result<StreetDetails, DbError> {
+        let query = sqlx::query("SELECT * FROM streets WHERE id = ?").bind(&id);
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        match rows_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let map_details_result = street_row_to_details(&rows[0]);
+                    match map_details_result {
+                        Ok(details) => return Ok(details),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                    // return Ok(user_id);
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+    }
+
+    pub async fn add_street(&self, details: &StreetDetails) -> Result<(), DbError> {
+        let insert_token_query =
+            sqlx::query("INSERT INTO streets(id, map_id, name) VALUES (?, ?, ?)")
+                .bind(details.id)
+                .bind(details.map_id)
+                .bind(details.name.clone());
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
+    // TODO
+    pub async fn update_street(&self, details: &StreetDetails) -> Result<(), DbError> {
+        let insert_token_query = if details.deleted {
+            sqlx::query("DELETE FROM streets WHERE id = ?").bind(details.id)
+        } else {
+            sqlx::query("UPDATE streets SET map_id = ?, name = ? WHERE id = ?")
+                .bind(details.map_id)
+                .bind(details.name.clone())
+                .bind(details.id)
+        };
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
     // ------------------- ADDRESSES -------------
+
+    pub async fn get_address(&self, id: u32) -> Result<AddressDetails, DbError> {
+        let query = sqlx::query("SELECT * FROM addresses WHERE id = ?").bind(&id);
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        match rows_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let user_details_result = address_row_to_details(&rows[0]);
+                    match user_details_result {
+                        Ok(details) => return Ok(details),
+                        Err(error) => return Err(DbError::AddressFailure(error)),
+                    }
+                    // return Ok(user_id);
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+    }
+
+    pub async fn add_address(&self, details: &AddressDetails) -> Result<(), DbError> {
+        let tags_encoded = rmp_serde::encode::to_vec(&details.tags)?;
+
+        let insert_token_query = sqlx::query(
+            "INSERT INTO addresses(id, street_id, number, tags, visited) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(details.id)
+        .bind(details.street_id)
+        .bind(details.number.clone())
+        .bind(tags_encoded)
+        .bind(details.visited);
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
+    // TODO
+    pub async fn update_address(&self, details: &AddressDetails) -> Result<(), DbError> {
+        let insert_token_query = if details.deleted {
+            sqlx::query("DELETE FROM addresses WHERE id = ?").bind(details.id)
+        } else {
+            let encoded_tags: Vec<u8> = rmp_serde::encode::to_vec(&details.tags)?;
+            sqlx::query("UPDATE addresses SET street_id = ?, number = ?, tags = ?, visited = ? WHERE id = ?")
+                .bind(details.street_id)
+                .bind(details.number.clone())
+                .bind(encoded_tags)
+                .bind(details.visited)
+                .bind(details.id)
+        };
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
 }
 
 fn cong_row_to_details(row: &SqliteRow) -> Result<CongDetails, sqlx::Error> {
@@ -382,6 +588,52 @@ fn user_row_to_details(row: &SqliteRow) -> Result<UserPublicDetails, sqlx::Error
         id,
         name,
         cong,
+        deleted: false,
+    })
+}
+
+fn map_row_to_details(row: &SqliteRow) -> Result<MapDetails, sqlx::Error> {
+    let id = row.try_get("id")?;
+    let assignee: u32 = row.try_get("assignee")?;
+    let assigner: u32 = row.try_get("assigner")?;
+    let image_name: String = row.try_get("file_name")?;
+    let category: u32 = row.try_get("category")?;
+    Ok(MapDetails {
+        id,
+        image_name,
+        assignee,
+        assigner,
+        image: None,
+        category,
+        deleted: false,
+    })
+}
+
+fn street_row_to_details(row: &SqliteRow) -> Result<StreetDetails, sqlx::Error> {
+    let id = row.try_get("id")?;
+    let map_id: u32 = row.try_get("map_id")?;
+    let name: String = row.try_get("name")?;
+    Ok(StreetDetails {
+        id,
+        map_id,
+        name,
+        deleted: false,
+    })
+}
+
+fn address_row_to_details(row: &SqliteRow) -> Result<AddressDetails, AddressError> {
+    let id = row.try_get("id")?;
+    let street_id: u32 = row.try_get("street_id")?;
+    let number: String = row.try_get("number")?;
+    let tags_encoded: Vec<u8> = row.try_get("tags")?;
+    let tags: Vec<AddressTags> = rmp_serde::from_slice(&tags_encoded)?;
+    let visited = row.try_get("cisited")?;
+    Ok(AddressDetails {
+        id,
+        street_id,
+        number,
+        tags,
+        visited,
         deleted: false,
     })
 }

@@ -1,7 +1,7 @@
 use crate::database::MyDatabase;
 use crate::datatypes::{
-    CategoryDetails, CongDetails, DbError, GroupDetails, ServerPayload, SyncInformation,
-    UserPublicDetails,
+    AddressDetails, CategoryDetails, CongDetails, DbError, GroupDetails, MapDetails, StreetDetails,
+    SyncInformation, UserPublicDetails,
 };
 use std::fs::File;
 use std::io::Write;
@@ -13,6 +13,9 @@ pub async fn sync_with_server(db: MyDatabase, sync_info: SyncInformation) -> Res
     let categories = sync_info.categories;
     let service_groups = sync_info.service_groups;
     let users = sync_info.users;
+    let maps = sync_info.maps;
+    let streets = sync_info.streets;
+    let addresses = sync_info.addresses;
 
     // Sync Congregations
     let cong_sync_result = sync_congregations(congregations, db.clone()).await;
@@ -26,7 +29,7 @@ pub async fn sync_with_server(db: MyDatabase, sync_info: SyncInformation) -> Res
         println!("Syncing categories failed: {}", category_error);
     }
 
-    // TODO: Sync users here, before groups
+    // Sync users
     let user_sync_result = sync_users(users, db.clone()).await;
     if let Err(user_error) = user_sync_result {
         println!("Syncing users failed: {}", user_error);
@@ -36,6 +39,24 @@ pub async fn sync_with_server(db: MyDatabase, sync_info: SyncInformation) -> Res
     let service_group_result = sync_service_groups(service_groups, db.clone()).await;
     if let Err(service_error) = service_group_result {
         println!("Syncing groups failed: {}", service_error);
+    }
+
+    // TODO: Sync maps here
+    let maps_result = sync_maps(maps, db.clone()).await;
+    if let Err(maps_error) = maps_result {
+        println!("Syncing maps failed: {}", maps_error);
+    }
+
+    // TODO: Sync streets
+    let streets_result = sync_streets(streets, db.clone()).await;
+    if let Err(street_error) = streets_result {
+        println!("Syncing streets failed: {}", street_error);
+    }
+
+    // TODO: Sync addresses? maybe not, load when click on app
+    let addresses_result = sync_addresses(addresses, db.clone()).await;
+    if let Err(addresses_error) = addresses_result {
+        println!("Syncing addresses failed: {}", addresses_error);
     }
 
     Ok(())
@@ -114,20 +135,16 @@ async fn sync_service_groups(groups: Vec<GroupDetails>, db: MyDatabase) -> Resul
     Ok(())
 }
 
-// TODO: Write this, it is currently copied and pasted sync_service_groups()
 async fn sync_users(users: Vec<UserPublicDetails>, db: MyDatabase) -> Result<(), DbError> {
     for user in users {
-        let group_result = db.get_user(user.id).await;
-        match group_result {
+        let user_result = db.get_user(user.id).await;
+        match user_result {
             Ok(_) => {
-                let _result = db.update_user(user).await;
+                let _result = db.update_user(user).await?;
             }
             Err(err) => match err {
                 DbError::InvalidToken(_id) => {
-                    let add_group_result = db.add_user(user).await;
-                    if let Err(error) = add_group_result {
-                        return Err(error);
-                    }
+                    let _add_group_result = db.add_user(user).await?;
                 }
                 _ => {
                     return Err(err);
@@ -138,53 +155,88 @@ async fn sync_users(users: Vec<UserPublicDetails>, db: MyDatabase) -> Result<(),
     Ok(())
 }
 
-// async fn _save_image(
-//     image_payload: ServerPayload,
-//     timestamp: Vec<u8>,
-//     db: &sqlx::Pool<sqlx::Sqlite>,
-// ) -> Result<(), ()> {
-//     match image_payload {
-//         ServerPayload::MapImage {
-//             image_name,
-//             image,
-//             assignee,
-//             assigner,
-//             category,
-//         } => {
-//             let new_image_file = File::create(format!("../maps/{}", image_name.as_str()));
-//             if let Ok(mut image_file) = new_image_file {
-//                 let attempt_to_write = image_file.write(&image);
-//                 if let Ok(_) = attempt_to_write {
-//                     println!("Successfully saved the image");
-//                 }
-//             } else {
-//                 println!("Failed to create image file");
-//             }
+async fn sync_maps(maps: Vec<MapDetails>, db: MyDatabase) -> Result<(), DbError> {
+    for map in maps {
+        let map_result = db.get_map(map.id).await;
+        match map_result {
+            Ok(_) => {
+                let _result = db.update_map(&map).await?;
+            }
+            Err(err) => match err {
+                DbError::InvalidLocation(_id) => {
+                    // TODO: Check if map not deleted
+                    let _add_map_result = db.add_map(&map).await?;
+                }
+                _ => {
+                    return Err(err);
+                }
+            },
+        }
 
-//             // TODO: Save to database
+        match map.image {
+            Some(image) => {
+                let _save_image_result = save_image(image, &map.image_name).await;
+            }
+            None => {}
+        }
+    }
+    Ok(())
+}
 
-//             let insert_image_query = sqlx::query(
-//         "INSERT INTO maps(assignee, assigner, category, file_name, updated) VALUES (?,?,?,?,?,?)",
-//     )
-//     .bind(assignee)
-//     .bind(assigner)
-//     .bind(category)
-//     .bind(hex::encode(image_name))
-//     .bind(hex::encode(timestamp));
+async fn save_image(image_payload: Vec<u8>, image_name: &str) -> Result<(), ()> {
+    let new_image_file = File::create(format!("../maps/{}", image_name));
+    if let Ok(mut image_file) = new_image_file {
+        let attempt_to_write = image_file.write(&image_payload);
+        if let Ok(_) = attempt_to_write {
+            println!("Successfully saved the image");
+            return Ok(());
+        } else {
+            return Err(());
+        }
+    } else {
+        println!("Failed to create image file");
+        return Err(());
+    }
+}
 
-//             let query_result = insert_image_query.execute(db).await;
+async fn sync_streets(streets: Vec<StreetDetails>, db: MyDatabase) -> Result<(), DbError> {
+    for street in streets {
+        let street_result = db.get_street(street.id).await;
+        match street_result {
+            Ok(_) => {
+                let _result = db.update_street(&street).await?;
+            }
+            Err(err) => match err {
+                DbError::InvalidLocation(_id) => {
+                    // TODO: Check if street not deleted
+                    let _add_street_result = db.add_street(&street).await?;
+                }
+                _ => {
+                    return Err(err);
+                }
+            },
+        }
+    }
+    Ok(())
+}
 
-//             if let Err(result) = query_result {
-//                 // TODO: handle this error
-//                 println!(
-//                     "Something went wrong inserting refresh token into database, error: {:?}",
-//                     result
-//                 )
-//             }
-//             return Ok(());
-//         }
-//         _ => {
-//             return Err(());
-//         }
-//     }
-// }
+async fn sync_addresses(addresses: Vec<AddressDetails>, db: MyDatabase) -> Result<(), DbError> {
+    for address in addresses {
+        let address_result = db.get_address(address.id).await;
+        match address_result {
+            Ok(_) => {
+                let _result = db.update_address(&address).await?;
+            }
+            Err(err) => match err {
+                DbError::InvalidLocation(_id) => {
+                    // TODO: Check if address not deleted
+                    let _add_street_result = db.add_address(&address).await?;
+                }
+                _ => {
+                    return Err(err);
+                }
+            },
+        }
+    }
+    Ok(())
+}

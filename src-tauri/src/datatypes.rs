@@ -59,11 +59,13 @@ pub struct WsEvent {
 // The following structs are for syncing
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MapDetails {
+    pub id: u32,
     pub image_name: String,
     pub assignee: u32,
     pub assigner: u32,
     pub image: Option<Vec<u8>>,
     pub category: u32,
+    pub deleted: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -75,12 +77,21 @@ pub enum AddressTags {
 
 // TODO: use
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct _AddressDetails {
+pub struct AddressDetails {
     pub id: u32,
-    pub map_id: u32,
+    pub street_id: u32,
     pub number: String,
     pub tags: Vec<AddressTags>,
     pub visited: bool,
+    pub deleted: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StreetDetails {
+    pub id: u32,
+    pub map_id: u32,
+    pub name: String,
+    pub deleted: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -126,6 +137,9 @@ pub struct SyncInformation {
     pub categories: Vec<CategoryDetails>,
     pub service_groups: Vec<GroupDetails>,
     pub users: Vec<UserPublicDetails>,
+    pub maps: Vec<MapDetails>,
+    pub streets: Vec<StreetDetails>,
+    pub addresses: Vec<AddressDetails>,
 }
 
 /// All errors relating to MyDatabase
@@ -138,9 +152,16 @@ pub enum DbError {
     ConnectionFailure(sqlx::Error),
     QueryFailure(sqlx::Error),
     // TokenRngFailure(SysError),
+    SerialiseError(rmp_serde::encode::Error),
     AddressFailure(AddressError),
     UnknownError(sqlx::Error),
     Error,
+}
+
+impl From<rmp_serde::encode::Error> for DbError {
+    fn from(err: rmp_serde::encode::Error) -> Self {
+        DbError::SerialiseError(err)
+    }
 }
 
 impl fmt::Display for DbError {
@@ -160,6 +181,7 @@ impl fmt::Display for DbError {
             DbError::ConnectionFailure(error) => write!(f, "connection to db failed: {}", error),
             DbError::QueryFailure(error) => write!(f, "a query failed to run: {}", error),
             // DbError::TokenRngFailure(error) => write!(f, "a token failed to generate: {}", error),
+            DbError::SerialiseError(error) => write!(f, "failed to serialise data: {}", error),
             DbError::AddressFailure(error) => {
                 write!(f, "something went wrong with the addresses: {}", error)
             }
