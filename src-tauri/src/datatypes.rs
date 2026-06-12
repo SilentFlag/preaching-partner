@@ -3,39 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ClientMessage {
-    pub id: u32,
-    pub payload: ClientPayload,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ClientPayload {
-    Login { name: String, password: String },
-    UpdateCheckbox { map: i32, id: i32, checked: bool },
-    UpdateCheckboxDetails { map: i32, id: i32, name: String },
-    SetLowDataMode(bool),
-    RequestSync(u32),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ServerMessage {
-    pub id: u32,
-    pub timestamp: u32,
-    pub payload: ServerPayload,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ServerPayload {
-    ConfirmLogin {
-        success: bool,
-        refresh_token: Option<[u8; 32]>,
-        access_token: Option<[u8; 32]>,
-    },
-    SyncInformation(SyncInformation),
-    UnknownError,
-}
-
+// ------------------ MESSAGES SENT FROM CLIENT TO CLIENT ----------
 #[derive(Serialize, Clone)]
 pub enum FrontendReponse {
     ConfirmLogin { success: bool, name: String },
@@ -56,42 +24,50 @@ pub struct WsEvent {
     pub payload: ServerMessage,
 }
 
-// The following structs are for syncing
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct MapDetails {
+// ------------------ MESSAGES SENT FROM CLIENT TO SERVER ----------
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ClientMessage {
     pub id: u32,
-    pub image_name: String,
-    pub assignee: u32,
-    pub assigner: u32,
-    pub image: Option<Vec<u8>>,
-    pub category: u32,
-    pub deleted: bool,
+    pub payload: ClientPayload,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum AddressTags {
-    DoNotCall,
-    NoJunkMail,
-    Custom(String),
+pub enum ClientPayload {
+    Login { name: String, password: String },
+    UpdateCheckbox { map: i32, id: i32, checked: bool },
+    UpdateCheckboxDetails { map: i32, id: i32, name: String },
+    SetLowDataMode(bool),
+    RequestSync(u32),
 }
 
-// TODO: use
+// ------------------ MESSAGES SENT FROM SERVER TO CLIENT ----------
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct AddressDetails {
+pub struct ServerMessage {
     pub id: u32,
-    pub street_id: u32,
-    pub number: String,
-    pub tags: Vec<AddressTags>,
-    pub visited: bool,
-    pub deleted: bool,
+    pub timestamp: u32,
+    pub payload: ServerPayload,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct StreetDetails {
-    pub id: u32,
-    pub map_id: u32,
-    pub name: String,
-    pub deleted: bool,
+pub enum ServerPayload {
+    ConfirmLogin {
+        success: bool,
+        refresh_token: Option<[u8; 32]>,
+        access_token: Option<[u8; 32]>,
+    },
+    SyncInformation(SyncInformation),
+    UnknownError,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SyncInformation {
+    pub congregations: Vec<CongDetails>,
+    pub categories: Vec<CategoryDetails>,
+    pub service_groups: Vec<GroupDetails>,
+    pub users: Vec<UserPublicDetails>,
+    pub maps: Vec<MapDetails>,
+    pub streets: Vec<StreetDetails>,
+    pub addresses: Vec<AddressDetails>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -100,16 +76,6 @@ pub struct CongDetails {
     pub cong_name: String,
     pub remove: bool,
     pub updated: u32,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct CategoryDetails {
-    pub id: u32,
-    pub name: String,
-    pub prefix: String,
-    pub congregation: u32,
-    pub updated: u32,
-    pub remove: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -124,21 +90,56 @@ pub struct GroupDetails {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct UserPublicDetails {
+pub struct MapDetails {
     pub id: u32,
+    pub image_name: String,
+    pub assignee: u32,
+    pub assigner: u32,
+    pub image: Option<Vec<u8>>,
+    pub category: u32,
+    pub deleted: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct CategoryDetails {
+    pub id: u32,
+    pub name: String,
+    pub prefix: String,
+    pub congregation: u32,
+    pub updated: u32,
+    pub remove: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct StreetDetails {
+    pub id: u32,
+    pub map_id: u32,
     pub name: String,
     pub deleted: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct SyncInformation {
-    pub congregations: Vec<CongDetails>,
-    pub categories: Vec<CategoryDetails>,
-    pub service_groups: Vec<GroupDetails>,
-    pub users: Vec<UserPublicDetails>,
-    pub maps: Vec<MapDetails>,
-    pub streets: Vec<StreetDetails>,
-    pub addresses: Vec<AddressDetails>,
+pub enum AddressTags {
+    DoNotCall,
+    NoJunkMail,
+    Custom(String),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AddressDetails {
+    pub id: u32,
+    pub street_id: u32,
+    pub number: String,
+    pub tags: Vec<AddressTags>,
+    pub visited: bool,
+    pub deleted: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct UserPublicDetails {
+    pub id: u32,
+    pub name: String,
+    pub deleted: bool,
 }
 
 /// All errors relating to MyDatabase
