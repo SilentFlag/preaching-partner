@@ -76,7 +76,7 @@ pub async fn connect_to_server(
                             let msg: ServerMessage = rmp_serde::from_slice(&bin).expect("Something went wrong decoding message");
 
                             let response_msg = msg.clone();
-                            println!("\n Response from server: {:?} \n", msg.clone());
+                            // println!("\n Response from server: {:?} \n", msg.clone());
 
                             let timestamp = msg.timestamp;
                             let timestamp_vec = rmp_serde::to_vec(&timestamp);
@@ -105,6 +105,7 @@ pub async fn connect_to_server(
                                     }
                                     _ => {
                                         // TODO: handle unexpected message
+                                        println!("unexpected message");
                                         continue;
                                     }
                                     // Send response back to original caller

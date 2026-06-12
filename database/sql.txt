@@ -12,4 +12,4 @@ CREATE TABLE maps(id INTEGER PRIMARY KEY, assignee INT, assigner INT, category I
 
 CREATE TABLE streets(id INTEGER PRIMARY KEY, map_id, name VARCHAR(255), CONSTRAINT fk_map_id FOREIGN KEY (map_id) REFERENCES maps(id));
 
-CREATE TABLE addresses(id INTEGER PRIMARY KEY, street_id INTEGER, number VARCHAR(255), tags BLOB, visited BOOL, CONSTRAINT fk_street_id FOREIGN KEY (street_id) REFERENCES street(id));
+CREATE TABLE addresses(id INTEGER PRIMARY KEY, street_id INTEGER, number VARCHAR(255), tags BLOB, visited BOOL, CONSTRAINT fk_street_id FOREIGN KEY (street_id) REFERENCES streets(id));

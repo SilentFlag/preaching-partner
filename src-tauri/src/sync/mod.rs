@@ -163,7 +163,7 @@ async fn sync_maps(maps: Vec<MapDetails>, db: MyDatabase) -> Result<(), DbError>
                 let _result = db.update_map(&map).await?;
             }
             Err(err) => match err {
-                DbError::InvalidLocation(_id) => {
+                DbError::InvalidToken(_id) => {
                     // TODO: Check if map not deleted
                     let _add_map_result = db.add_map(&map).await?;
                 }
@@ -207,7 +207,7 @@ async fn sync_streets(streets: Vec<StreetDetails>, db: MyDatabase) -> Result<(),
                 let _result = db.update_street(&street).await?;
             }
             Err(err) => match err {
-                DbError::InvalidLocation(_id) => {
+                DbError::InvalidToken(_id) => {
                     // TODO: Check if street not deleted
                     let _add_street_result = db.add_street(&street).await?;
                 }
@@ -228,7 +228,7 @@ async fn sync_addresses(addresses: Vec<AddressDetails>, db: MyDatabase) -> Resul
                 let _result = db.update_address(&address).await?;
             }
             Err(err) => match err {
-                DbError::InvalidLocation(_id) => {
+                DbError::InvalidToken(_id) => {
                     // TODO: Check if address not deleted
                     let _add_street_result = db.add_address(&address).await?;
                 }

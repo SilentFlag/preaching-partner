@@ -127,7 +127,6 @@ pub struct GroupDetails {
 pub struct UserPublicDetails {
     pub id: u32,
     pub name: String,
-    pub cong: u32,
     pub deleted: bool,
 }
 

@@ -312,7 +312,7 @@ impl MyDatabase {
         let insert_token_query = if *deleted {
             sqlx::query("DELETE FROM maps WHERE id = ?").bind(id)
         } else {
-            sqlx::query("UPDATE maps SET image_name = ?, assignee = ?, assigner = ?, category = ? WHERE id = ?")
+            sqlx::query("UPDATE maps SET file_name = ?, assignee = ?, assigner = ?, category = ? WHERE id = ?")
                 .bind(image_name)
                 .bind(assignee)
                 .bind(assigner)
@@ -556,38 +556,28 @@ fn category_row_to_details(row: &SqliteRow) -> Result<CategoryDetails, sqlx::Err
 ///     Ok(GroupDetails): Function successful
 ///     Err(sqlx::Error): Sqlx Error occured
 fn group_row_to_details(row: &SqliteRow) -> Result<GroupDetails, sqlx::Error> {
-    let id = row.try_get("group_id")?;
+    let id = row.try_get("id")?;
     let name: String = row.try_get("name")?;
     let cong: u32 = row.try_get("congregation")?;
     let elder: u32 = row.try_get("elder")?;
-    let group_updated: u32 = row.try_get("group_updated")?;
-    let pair_updated: u32 = row.try_get("pair_updated")?;
-    let updated: u32 = if group_updated > pair_updated {
-        group_updated
-    } else {
-        pair_updated
-    };
-    let group_deleted: bool = row.try_get("delted")?;
-    let pair_deleted: bool = row.try_get("pair_delted")?;
+    let updated: u32 = row.try_get("updated")?;
     Ok(GroupDetails {
         id,
         name,
         cong,
         elder,
         updated,
-        group_deleted,
-        pair_deleted,
+        group_deleted: false,
+        pair_deleted: false,
     })
 }
 
 fn user_row_to_details(row: &SqliteRow) -> Result<UserPublicDetails, sqlx::Error> {
     let id = row.try_get("id")?;
     let name: String = row.try_get("name")?;
-    let cong: u32 = row.try_get("congregation")?;
     Ok(UserPublicDetails {
         id,
         name,
-        cong,
         deleted: false,
     })
 }
@@ -627,7 +617,7 @@ fn address_row_to_details(row: &SqliteRow) -> Result<AddressDetails, AddressErro
     let number: String = row.try_get("number")?;
     let tags_encoded: Vec<u8> = row.try_get("tags")?;
     let tags: Vec<AddressTags> = rmp_serde::from_slice(&tags_encoded)?;
-    let visited = row.try_get("cisited")?;
+    let visited = row.try_get("visited")?;
     Ok(AddressDetails {
         id,
         street_id,
