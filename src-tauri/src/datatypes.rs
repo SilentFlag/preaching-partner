@@ -1,7 +1,12 @@
+use futures::StreamExt;
 // use rand::rngs::SysError;
+use futures_util::SinkExt;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio_tungstenite::tungstenite::Message;
+
+use crate::{database::MyDatabase, services};
 
 // ------------------ MESSAGES SENT FROM CLIENT TO CLIENT ----------
 #[derive(Serialize, Clone)]
@@ -24,10 +29,103 @@ pub struct WsEvent {
     pub payload: ServerMessage,
 }
 
+// ------------------ ABSTRACTION FOR SENDING SERVER MESSAGES ----------
+
+pub struct WsSender {
+    pub write: futures_util::stream::SplitSink<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+        Message,
+    >,
+    pub read: futures_util::stream::SplitStream<
+        tokio_tungstenite::WebSocketStream<
+            tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+        >,
+    >,
+}
+
+impl WsSender {
+    pub async fn send(
+        &mut self,
+        mut msg: ClientMessage,
+        token: [u8; 32],
+        db: MyDatabase,
+    ) -> Result<Option<[u8; 32]>, tokio_tungstenite::tungstenite::Error> {
+        let _send_attempts = 0;
+        loop {
+            if let Some(_token) = msg.access_token {
+                let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
+                // TODO: Handle error
+                let _result = self
+                    .write
+                    .send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes))
+                    .await;
+                return Ok(msg.access_token);
+            } else {
+                let get_token_msg = ClientMessage {
+                    id: 0,
+                    access_token: None,
+                    payload: ClientPayload::RequestAccessToken(token),
+                };
+                // TODO: handle errors
+                let msg_bytes = rmp_serde::to_vec(&get_token_msg).unwrap();
+                let _result = self
+                    .write
+                    .send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes))
+                    .await; // ERROR DOES GO INTO
+                if let Some(server_message) = self.read.next().await {
+                    match server_message {
+                        Ok(server_message) => {
+                            if let Message::Binary(message_binary) = server_message {
+                                let server_msg: Result<ServerMessage, rmp_serde::decode::Error> =
+                                    rmp_serde::from_slice(&message_binary);
+                                match server_msg {
+                                    Ok(message) => {
+                                        // TODO: Check if message is successful access token recieved, if so, save it and continue loop to try send original message again
+                                        match message.payload {
+                                            ServerPayload::NewAccessToken(token) => {
+                                                let save_result =
+                                                    services::save_access_token(db.clone(), token)
+                                                        .await;
+                                                match save_result {
+                                                    Ok(_result) => {
+                                                        msg.access_token = Some(token);
+                                                        continue;
+                                                    }
+                                                    Err(_error) => {
+                                                        // TODO: handle error
+                                                    }
+                                                }
+                                            }
+                                            _ => {
+                                                // TODO: handle unexpected message
+                                            }
+                                        }
+                                    }
+                                    Err(_error) => {
+                                        println!("error decoding binary"); // TODO: Handle error
+                                    }
+                                }
+                            } else {
+                                println!("unexpected message type"); // TODO: handle error
+                            }
+                        }
+                        Err(_error) => {
+                            println!("failed to get message from server"); // TODO: Handle error
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ------------------ MESSAGES SENT FROM CLIENT TO SERVER ----------
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ClientMessage {
     pub id: u32,
+    pub access_token: Option<[u8; 32]>,
     pub payload: ClientPayload,
 }
 
@@ -36,6 +134,7 @@ pub enum ClientPayload {
     Login { name: String, password: String },
     UpdateCheckbox { map: i32, id: i32, checked: bool },
     UpdateCheckboxDetails { map: i32, id: i32, name: String },
+    RequestAccessToken([u8; 32]),
     SetLowDataMode(bool),
     RequestSync(u32),
 }
@@ -56,6 +155,7 @@ pub enum ServerPayload {
         access_token: Option<[u8; 32]>,
     },
     SyncInformation(SyncInformation),
+    NewAccessToken([u8; 32]),
     UnknownError,
 }
 
@@ -142,7 +242,7 @@ pub struct UserPublicDetails {
     pub deleted: bool,
 }
 
-/// All errors relating to MyDatabase
+/// ----------------------------- All errors relating to MyDatabase
 /// // TODO: allow last errors once needed
 #[derive(Debug)]
 pub enum DbError {

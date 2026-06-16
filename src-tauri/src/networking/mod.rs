@@ -1,151 +1,192 @@
 use crate::database::MyDatabase;
 use crate::datatypes::{
-    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
+    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest, WsSender,
 };
-use crate::services::{save_access_token, save_refresh_token};
+use crate::services;
 use crate::sync::sync_with_server;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 
+// pub type WsWrite = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
 pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
-    event_tx: broadcast::Sender<WsEvent>,
+    _event_tx: broadcast::Sender<WsEvent>,
+    db: MyDatabase, // DB functions must not be called directly, instead they should be called through the services module, this is to ensure that all database interactions are properly authenticated, logged and handled
 ) {
     // Create Connection
     let url = String::from("ws://127.0.0.1:9001");
 
+    // TODO: Handle connection errors, retry connection with exponential backoff, alert user if connection fails after multiple attempts
     let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");
 
     println!("Connected to server");
 
-    let (mut write, mut read) = ws_stream.split();
+    let (write, read) = ws_stream.split();
+
+    let mut sender: WsSender = WsSender { write, read };
 
     // TODO: RUSTLS ENCRYPTION
 
-    // Open database
-    let db = MyDatabase::new().await;
-    match db {
-        Ok(db) => {
-            let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
-            let mut response_senders = HashMap::new();
+    let refresh_token = services::is_logged_in(db.clone()).await;
+    if let Some(refresh_token) = refresh_token {
+        let mut access_token = services::get_access_token(db.clone()).await;
 
-            // Request to sync after initial setup of db and connection has been established
-            // TODO: Set the time to the last time it has synced rather than a concrete value
-            let msg: ClientMessage = ClientMessage {
-                // form message to send
-                id: 1,
-                payload: ClientPayload::RequestSync(0),
-            };
-            let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
-            let _ = write
-                .send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes))
-                .await; // ERROR DOES GO INTO
-            println!("sent sync request");
+        // Request to sync after initial setup of db and connection has been established
+        // TODO: Set the time to the last time it has synced rather than a concrete value
+        // TODO: use access token instead of user_id
+        let mut current_id: u32 = 1; // Message id, don't start at 0, 0 indicates global message
+        let mut response_senders = HashMap::new();
 
-            // Core loop
+        let msg: ClientMessage = ClientMessage {
+            // form message to send
+            id: 0,
+            access_token: access_token,
+            payload: ClientPayload::RequestSync(0),
+        };
 
-            loop {
-                tokio::select! {
-                    // handle io messages
-                    Some(req) = request_rx.recv() => {
-                        // TODO: Check database for existing data before sending request
+        let send_result = sender.send(msg, refresh_token, db.clone()).await;
+        match send_result {
+            Ok(new_token) => access_token = new_token,
+            Err(_) => { // TODO: handle error
+            }
+        }
+        println!("sent sync request");
 
-                        // handle outgoing ws message
-                        response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
-                        let client_payload: ClientPayload = req.payload.into(); // extract payload
+        // Core loop
 
-                        let msg: ClientMessage = ClientMessage { // form message to send
-                            id: current_id,
-                            payload: client_payload,
-                        };
-                        let msg_bytes = rmp_serde::to_vec(&msg).unwrap();
-                        let _send_message_result = write.send(tokio_tungstenite::tungstenite::Message::binary(msg_bytes)).await; // ERROR DOES GO INTO
-                        current_id += 1;
+        loop {
+            tokio::select! {
+                // handle io messages
+                Some(req) = request_rx.recv() => {
 
-                        println!("Sent server message")
+                    let client_payload: ClientPayload = req.payload.into(); // extract payload
+
+                    // Check for perms to do action
+                    match client_payload {
+                        ClientPayload::Login{name: _, password: _} => {
+                            // TODO: Handle case, this should not be reached
+                            continue;
+                        }
+                        _ => {}
                     }
 
-                    // Handle incoming messages
-                    Some(msg) = read.next() => {
-                        let coded_msg = msg.expect("Something went wrong reading the next message from the server");
-                        println!("read message from server");
-                        if let Message::Binary(bin) = coded_msg {
-                            let msg: ServerMessage = rmp_serde::from_slice(&bin).expect("Something went wrong decoding message");
+                    response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
 
-                            let response_msg = msg.clone();
-                            // println!("\n Response from server: {:?} \n", msg.clone());
+                    let msg: ClientMessage = ClientMessage { // form message to send
+                        id: current_id,
+                        access_token: access_token,
+                        payload: client_payload,
+                    };
+                    let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
+                    match send_result {
+                        Ok(new_token) => access_token = new_token,
+                        Err(_) => { // TODO: handle error
+                        }
+                    }
+                    current_id += 1;
 
-                            let timestamp = msg.timestamp;
-                            let timestamp_vec = rmp_serde::to_vec(&timestamp);
-                            match timestamp_vec {
-                                Ok(_timestamp_vec) => {
+                    println!("Sent server message")
+                }
 
-                                // Check for messages that require db writes
-                                // TODO: unsure why the message being unknown_error crashes it
-                                match msg.payload {
-                                    ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
+                // Handle incoming messages
+                Some(msg) = sender.read.next() => {
+                    let coded_msg = msg;
+                    match coded_msg {
+                        Ok(coded_msg) => {
 
-                                        // TODO: Handle Errors
-                                        if let Some(refresh_token_ok) = refresh_token {
-                                            let _refresh_result = save_refresh_token(db.clone(), refresh_token_ok).await;
+                            if let Message::Binary(bin) = coded_msg {
+                                let msg: Result<ServerMessage, rmp_serde::decode::Error> = rmp_serde::from_slice(&bin);
+
+                                match msg {
+                                    Ok(msg) => {
+
+                                        let response_msg = msg.clone();
+
+                                        let _timestamp: u32 = msg.timestamp;
+
+                                        // Check for messages that require db writes
+                                        // TODO: unsure why the message being unknown_error crashes it
+                                        match msg.payload {
+                                            ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
+
+                                                // TODO: Handle Errors
+                                                if let Some(refresh_token_ok) = refresh_token {
+                                                    let _refresh_result = services::save_refresh_token(db.clone(), refresh_token_ok).await;
+                                                }
+
+                                                if let Some(access_token_ok) = access_token {
+                                                    let _access_token_result = services::save_access_token(db.clone(), access_token_ok).await;
+                                                }
+                                            }
+                                            ServerPayload::SyncInformation(sync_info) => {
+                                                let sync_result = sync_with_server(db.clone(), sync_info).await;
+                                                if let Err(_error) = sync_result {
+                                                    // TODO: handle error
+                                                }
+                                            }
+                                            _ => {
+                                                // TODO: log unexpected message
+                                                println!("unexpected message");
+                                                continue;
+                                            }
+                                            // Send response back to original caller
                                         }
 
-                                        if let Some(access_token_ok) = access_token {
-                                            let _access_token_result = save_access_token(db.clone(), access_token_ok).await;
+                                        // Send message to the IO function which sent a request to the server
+                                        if msg.id == 0 {
+                                            // TODO: Broadcast a message to event listeners
+
+                                            // let send_results = event_tx.send(WsEvent { payload: response_msg });
+                                            // println!("failed to send message: {:?}", send_results);
+                                        } else {
+                                            let response_tx = response_senders.remove(&msg.id);
+                                            match response_tx {
+                                                Some(response_tx) => {
+                                                    let _ = response_tx.send(response_msg);
+                                                }
+                                                _ => {
+                                                    // TODO: handle error
+                                                    println!("failed to find response tx for server message");
+                                                }
+                                            }
                                         }
+
                                     }
-                                    ServerPayload::SyncInformation(sync_info) => {
-                                        let sync_result = sync_with_server(db.clone(), sync_info).await;
-                                        if let Err(_error) = sync_result {
-                                            // TODO: handle error
-                                        }
+                                    Err(_) => {
+                                        // TODO: Log error, unable to decode msg, report to server?
                                     }
-                                    _ => {
-                                        // TODO: handle unexpected message
-                                        println!("unexpected message");
-                                        continue;
-                                    }
-                                    // Send response back to original caller
                                 }
 
-                                if msg.id == 0 {
-                                    // let send_results = event_tx.send(WsEvent { payload: response_msg });
-                                    // println!("failed to send message: {:?}", send_results);
-                                } else {
-                                    let response_tx = response_senders.remove(&msg.id);
-                                    match response_tx {
-                                        Some(response_tx) => {
-                                            let _ = response_tx.send(response_msg);
-                                        }
-                                        _ => {
-                                            // TODO: handle error
-                                            println!("failed to find response tx for server message");
-                                        }
-                                    }
-                                }
 
-                                }
-                                Err(_) => {
-                                    // TODO: Handle this error
-                                    println!("failed to manage timestamp")
-                                }
+                            } else {
+                                let timestamp = SystemTime::now()
+                                    .duration_since(UNIX_EPOCH)
+                                    .expect("Time went backwards")
+                                    .as_secs() as u32;
+                                let _log_result = db.add_log(0, "Message recieved from the server was not binary", timestamp).await;
+                                // TODO: Reconnect to server? Potential wrong as the server doesn't send this kind of message
                             }
-                        } else {
-                            println!("Message was not binary");
+
+                        }
+                        Err(_) => {
+                            let timestamp = SystemTime::now()
+                                .duration_since(UNIX_EPOCH)
+                                .expect("Time went backwards")
+                                .as_secs() as u32;
+                            let _log_result = db.add_log(0, "Message recieved from the server was corrupt", timestamp).await;
+                            // TODO: Should something else be done here? Potentially alert the server or user that the last message was corrupt
                         }
                     }
                 }
             }
         }
-        Err(error) => {
-            panic!(
-                "Something went wrong trying to connect to the database: {}",
-                error
-            );
-        }
+    } else {
+        println!("user is not logged in") // TOOD: handle error, this should not happen as the user should have been prompted to log in before this function is called, but just in case
     }
 }
 

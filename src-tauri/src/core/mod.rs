@@ -1,0 +1,162 @@
+use crate::database::MyDatabase;
+use crate::datatypes::{
+    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
+};
+use crate::networking;
+use crate::services::is_logged_in;
+use crate::services::{save_access_token, save_refresh_token};
+use reqwest::Client as HttpClient;
+use tokio::sync::{broadcast, mpsc};
+
+pub async fn initiate_backend(
+    mut request_rx: mpsc::Receiver<WsRequest>,
+    event_tx: broadcast::Sender<WsEvent>,
+) {
+    // TODO: RUSTLS ENCRYPTION
+
+    // Open database
+    let db = MyDatabase::new().await;
+    match db {
+        Ok(db) => {
+            // TODO: Check if logged in
+            let logged_in = is_logged_in(db.clone()).await;
+
+            match logged_in {
+                Some(token) => {
+                    println!("User is logged in with refresh token: {:?}", token);
+                    networking::connect_to_server(request_rx, event_tx, db).await;
+                }
+                None => {
+                    println!("User is not logged in");
+                    loop {
+                        // wait for incoming login request from the frontend
+                        if let Some(req) = request_rx.recv().await {
+                            let client_payload: ClientPayload = req.payload.into(); // extract payload
+
+                            match client_payload {
+                                ClientPayload::Login {
+                                    name: _,
+                                    password: _,
+                                } => {
+                                    // form message to send
+                                    let msg: ClientMessage = ClientMessage {
+                                        id: 0,
+                                        access_token: None,
+                                        payload: client_payload,
+                                    };
+                                    let msg_bytes: Vec<u8> = rmp_serde::to_vec(&msg).unwrap();
+
+                                    // Send message to server
+                                    let client = HttpClient::new();
+                                    let login_response = client
+                                        .post("http://localhost:8000/login")
+                                        .header("Content-Type", "application/octet-stream")
+                                        .body(msg_bytes)
+                                        .send()
+                                        .await;
+
+                                    println!("Sent server message");
+
+                                    // handle response from server
+                                    match login_response {
+                                        Ok(response) => {
+                                            let response_bytes = response.bytes().await;
+                                            match response_bytes {
+                                                Ok(bytes) => {
+                                                    let response_msg: Result<
+                                                        ServerMessage,
+                                                        rmp_serde::decode::Error,
+                                                    > = rmp_serde::from_slice(&bytes);
+                                                    match response_msg {
+                                                        Ok(msg) => {
+                                                            println!(
+                                                                "Received login response: {:?}",
+                                                                msg
+                                                            );
+                                                            match msg.payload {
+                                                                ServerPayload::ConfirmLogin {
+                                                                    success,
+                                                                    refresh_token,
+                                                                    access_token,
+                                                                } => {
+                                                                    if success {
+                                                                        // Login successful
+                                                                        if let Some(
+                                                                            refresh_token_ok,
+                                                                        ) = refresh_token
+                                                                        {
+                                                                            let _refresh_result = save_refresh_token(db.clone(), refresh_token_ok).await;
+                                                                        } else {
+                                                                            println!("Login failed: No refresh token provided");
+                                                                            // TODO: Handle error, this shouldn't be reached
+                                                                        }
+
+                                                                        if let Some(
+                                                                            access_token_ok,
+                                                                        ) = access_token
+                                                                        {
+                                                                            let _access_token_result =
+                                                                                save_access_token(
+                                                                                    db.clone(),
+                                                                                    access_token_ok,
+                                                                                )
+                                                                                .await;
+                                                                        } else {
+                                                                            println!("Login failed: No access token provided");
+                                                                            // TODO: Handle error, this shouldn't be reached
+                                                                        }
+
+                                                                        // Now that we're logged in, connect to the server websocket
+                                                                        networking::connect_to_server(request_rx, event_tx, db.clone()).await;
+                                                                        // Break because login was successful and we don't want to keep waiting for login requests
+                                                                        break;
+                                                                    } else {
+                                                                        println!("Login failed: Invalid credentials");
+                                                                        // TODO: Send message to frontend about failed login attempt
+                                                                    }
+                                                                }
+                                                                _ => {
+                                                                    println!("Unexpected login response payload: {:?}", msg.payload);
+                                                                }
+                                                            }
+                                                        }
+                                                        Err(error) => {
+                                                            println!(
+                                                                "Failed to decode login response: {:?}",
+                                                                error
+                                                            ); // TODO: Handle and log error
+                                                        }
+                                                    }
+                                                }
+                                                Err(error) => {
+                                                    println!(
+                                                        "Failed to read login response bytes: {:?}",
+                                                        error
+                                                    ); // TODO: Handle and log error
+                                                }
+                                            }
+                                        }
+                                        Err(error) => {
+                                            println!("Login request failed: {:?}", error);
+                                            // TODO: Handle and log error
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    // Unexpected message, ignore, TODO: log this
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(error) => {
+            // TODO: Alert user of being unable to connect to database
+            panic!(
+                "Something went wrong trying to connect to the database: {}",
+                error
+            );
+        }
+    }
+}

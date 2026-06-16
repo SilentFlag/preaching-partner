@@ -1,3 +1,4 @@
+mod core;
 mod database;
 mod datatypes;
 mod networking;
@@ -76,7 +77,7 @@ pub fn run() {
     };
 
     tauri::async_runtime::spawn(async {
-        networking::connect_to_server(request_rx, event_tx).await;
+        core::initiate_backend(request_rx, event_tx).await;
     });
 
     tauri::Builder::default()

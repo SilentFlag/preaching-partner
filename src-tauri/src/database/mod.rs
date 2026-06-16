@@ -58,6 +58,52 @@ impl MyDatabase {
         Ok(())
     }
 
+    pub async fn get_refresh_token(&self) -> Result<[u8; 32], DbError> {
+        let get_token_query = sqlx::query("SELECT token FROM tokens WHERE refresh = true");
+
+        let query_result = get_token_query.fetch_all(&self.data).await;
+
+        match query_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let token = token_row_to_details(&rows[0]);
+                    match token {
+                        Ok(token) => Ok(token),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(result) => {
+                return Err(DbError::QueryFailure(result));
+            }
+        }
+    }
+
+    pub async fn get_access_token(&self) -> Result<[u8; 32], DbError> {
+        let get_token_query = sqlx::query("SELECT token FROM tokens WHERE refresh = false");
+
+        let query_result = get_token_query.fetch_all(&self.data).await;
+
+        match query_result {
+            Ok(rows) => {
+                if rows.len() == 1 {
+                    let token = token_row_to_details(&rows[0]);
+                    match token {
+                        Ok(token) => Ok(token),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                } else {
+                    return Err(DbError::InvalidToken(rows.len() as u32));
+                }
+            }
+            Err(result) => {
+                return Err(DbError::QueryFailure(result));
+            }
+        }
+    }
+
     // ------------------- CONGREGATIONS -------------
 
     pub async fn get_congregation(&self, id: u32) -> Result<CongDetails, DbError> {
@@ -421,7 +467,6 @@ impl MyDatabase {
         Ok(())
     }
 
-    // TODO
     pub async fn update_street(&self, details: &StreetDetails) -> Result<(), DbError> {
         let insert_token_query = if details.deleted {
             sqlx::query("DELETE FROM streets WHERE id = ?").bind(details.id)
@@ -484,7 +529,6 @@ impl MyDatabase {
         Ok(())
     }
 
-    // TODO
     pub async fn update_address(&self, details: &AddressDetails) -> Result<(), DbError> {
         let insert_token_query = if details.deleted {
             sqlx::query("DELETE FROM addresses WHERE id = ?").bind(details.id)
@@ -497,6 +541,23 @@ impl MyDatabase {
                 .bind(details.visited)
                 .bind(details.id)
         };
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
+    // ------------------- LOGGING -------------
+
+    pub async fn add_log(&self, code: u32, message: &str, timestamp: u32) -> Result<(), DbError> {
+        let insert_token_query =
+            sqlx::query("INSERT INTO logs(code, message, timestamp) VALUES (?, ?, ?)")
+                .bind(code)
+                .bind(message)
+                .bind(timestamp);
 
         let query_result = insert_token_query.execute(&self.data).await;
 
@@ -626,4 +687,18 @@ fn address_row_to_details(row: &SqliteRow) -> Result<AddressDetails, AddressErro
         visited,
         deleted: false,
     })
+}
+
+fn token_row_to_details(row: &SqliteRow) -> Result<[u8; 32], sqlx::Error> {
+    let token_encoded: Vec<u8> = row.try_get("token")?;
+    let token = hex::decode(token_encoded);
+    match token {
+        Ok(token) => {
+            let mut token_array = [0u8; 32];
+            token_array.copy_from_slice(&token);
+            Ok(token_array)
+        }
+        // TODO: Actual error type
+        Err(_error) => return Err(sqlx::Error::PoolTimedOut),
+    }
 }
