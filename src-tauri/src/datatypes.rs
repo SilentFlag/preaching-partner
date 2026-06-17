@@ -135,7 +135,6 @@ pub enum ClientPayload {
     UpdateCheckbox { map: i32, id: i32, checked: bool },
     UpdateCheckboxDetails { map: i32, id: i32, name: String },
     RequestAccessToken([u8; 32]),
-    SetLowDataMode(bool),
     RequestSync(u32),
 }
 

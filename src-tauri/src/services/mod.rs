@@ -1,11 +1,4 @@
-use crate::networking;
-use futures_util::{SinkExt, StreamExt};
-use tokio_tungstenite::tungstenite;
-
-use crate::{
-    database::MyDatabase,
-    datatypes::{ClientMessage, DbError},
-};
+use crate::{database::MyDatabase, datatypes::DbError};
 
 pub async fn save_access_token(db: MyDatabase, token: [u8; 32]) -> Result<(), DbError> {
     db.save_access_token(token).await

@@ -19,7 +19,7 @@ pub async fn connect_to_server(
     db: MyDatabase, // DB functions must not be called directly, instead they should be called through the services module, this is to ensure that all database interactions are properly authenticated, logged and handled
 ) {
     // Create Connection
-    let url = String::from("ws://127.0.0.1:9001");
+    let url = String::from("ws://127.0.0.1:9001/ws");
 
     // TODO: Handle connection errors, retry connection with exponential backoff, alert user if connection fails after multiple attempts
     let (ws_stream, _) = connect_async(&url).await.expect("Failed to connect");

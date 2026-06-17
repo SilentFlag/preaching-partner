@@ -49,13 +49,11 @@ pub async fn initiate_backend(
                                     // Send message to server
                                     let client = HttpClient::new();
                                     let login_response = client
-                                        .post("http://localhost:8000/login")
+                                        .post("http://localhost:9001/login")
                                         .header("Content-Type", "application/octet-stream")
                                         .body(msg_bytes)
                                         .send()
                                         .await;
-
-                                    println!("Sent server message");
 
                                     // handle response from server
                                     match login_response {
