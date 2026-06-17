@@ -1,17 +1,22 @@
 use futures::StreamExt;
-// use rand::rngs::SysError;
 use futures_util::SinkExt;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::sync::Mutex;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_tungstenite::tungstenite::Message;
 
 use crate::{database::MyDatabase, services};
 
 // ------------------ MESSAGES SENT FROM CLIENT TO CLIENT ----------
-#[derive(Serialize, Clone)]
-pub enum FrontendReponse {
-    ConfirmLogin { success: bool, name: String },
+// #[derive(Serialize, Clone)]
+// pub enum FrontendReponse {
+//     ConfirmLogin { success: bool, name: String },
+// }
+
+pub struct StartupState {
+    pub request_rx: Mutex<Option<mpsc::Receiver<WsRequest>>>,
+    pub event_tx: broadcast::Sender<WsEvent>,
 }
 
 pub struct WsState {

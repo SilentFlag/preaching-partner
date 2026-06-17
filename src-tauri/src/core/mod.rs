@@ -6,11 +6,13 @@ use crate::networking;
 use crate::services::is_logged_in;
 use crate::services::{save_access_token, save_refresh_token};
 use reqwest::Client as HttpClient;
+use tauri::{AppHandle, Emitter};
 use tokio::sync::{broadcast, mpsc};
 
 pub async fn initiate_backend(
     mut request_rx: mpsc::Receiver<WsRequest>,
     event_tx: broadcast::Sender<WsEvent>,
+    app_handle: AppHandle,
 ) {
     // TODO: RUSTLS ENCRYPTION
 
@@ -24,7 +26,15 @@ pub async fn initiate_backend(
             match logged_in {
                 Some(token) => {
                     println!("User is logged in with refresh token: {:?}", token);
-                    networking::connect_to_server(request_rx, event_tx, db).await;
+                    // TODO: Handle result
+                    let emission_result = app_handle.emit("login", true).map_err(|e| e.to_string());
+                    if let Err(error) = emission_result {
+                        println!(
+                            "There was an error sending a message to the frontend: {}",
+                            error
+                        );
+                    }
+                    networking::connect_to_server(request_rx, event_tx, db, app_handle).await;
                 }
                 None => {
                     println!("User is not logged in");
@@ -32,6 +42,7 @@ pub async fn initiate_backend(
                         // wait for incoming login request from the frontend
                         if let Some(req) = request_rx.recv().await {
                             let client_payload: ClientPayload = req.payload.into(); // extract payload
+                            let response_sender = req.response_tx;
 
                             match client_payload {
                                 ClientPayload::Login {
@@ -78,6 +89,9 @@ pub async fn initiate_backend(
                                                                     access_token,
                                                                 } => {
                                                                     if success {
+                                                                        println!(
+                                                                            "login  successful"
+                                                                        );
                                                                         // Login successful
                                                                         if let Some(
                                                                             refresh_token_ok,
@@ -86,6 +100,7 @@ pub async fn initiate_backend(
                                                                             let _refresh_result = save_refresh_token(db.clone(), refresh_token_ok).await;
                                                                         } else {
                                                                             println!("Login failed: No refresh token provided");
+                                                                            // TODO: Send alert to frontend
                                                                             // TODO: Handle error, this shouldn't be reached
                                                                         }
 
@@ -101,16 +116,25 @@ pub async fn initiate_backend(
                                                                                 .await;
                                                                         } else {
                                                                             println!("Login failed: No access token provided");
+                                                                            // TODO: Send alert to frontend
                                                                             // TODO: Handle error, this shouldn't be reached
                                                                         }
 
+                                                                        // Inform frontend of login
+                                                                        // TODO: Handle error
+                                                                        let _send_response_result =
+                                                                            response_sender
+                                                                                .send(msg);
+
                                                                         // Now that we're logged in, connect to the server websocket
-                                                                        networking::connect_to_server(request_rx, event_tx, db.clone()).await;
+                                                                        networking::connect_to_server(request_rx, event_tx, db.clone(), app_handle).await;
                                                                         // Break because login was successful and we don't want to keep waiting for login requests
                                                                         break;
                                                                     } else {
-                                                                        println!("Login failed: Invalid credentials");
-                                                                        // TODO: Send message to frontend about failed login attempt
+                                                                        // TODO: Handle error
+                                                                        let _send_response_result =
+                                                                            response_sender
+                                                                                .send(msg);
                                                                     }
                                                                 }
                                                                 _ => {

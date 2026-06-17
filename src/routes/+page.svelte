@@ -19,29 +19,35 @@
   let password = $state('password');
   let login_failed = $state('');
 
-  listen('login-result', event => {
-    console.log('Received login-result event:', event);
-    const payload = event.payload.ConfirmLogin;
-    const success = payload.success;
-    console.log('login success:', success);
-    console.log('name:', payload.name);
-    if (success) {
-      console.log('Login successful, redirecting to dashboard...');
+  listen('login', event => {
+    let success = event.payload;
+    console.log('Received login event with success:', success);
+    if (success  === true) {
+      console.log('Login successful, navigating to dashboard');
       window.location.replace('./dashboard');
     } else {
+      console.log('Login failed, showing error message');
       login_failed = 'Invalid username or password';
     }
   });
 
+  // TODO: listen for an event to hide a loading screen rather than having the form by default
+  // listen('form', event => {
+  //   console.log('Received login event:', event);
+  //   window.location.replace('./dashboard');
+  // });
+
   async function handleLogin() {
 
     try {
-      await invoke('login', { username, password });
       console.log('Login call successful');
+      await invoke('login', { username, password });
     } catch (error) {
       console.error('Login failed', error);
     }
   }
+
+  invoke("app_loaded");
 </script>
 
 <style>

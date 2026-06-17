@@ -7,6 +7,7 @@ use crate::sync::sync_with_server;
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::AppHandle;
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -17,6 +18,7 @@ pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
     _event_tx: broadcast::Sender<WsEvent>,
     db: MyDatabase, // DB functions must not be called directly, instead they should be called through the services module, this is to ensure that all database interactions are properly authenticated, logged and handled
+    _app_handle: AppHandle,
 ) {
     // Create Connection
     let url = String::from("ws://127.0.0.1:9001/ws");
