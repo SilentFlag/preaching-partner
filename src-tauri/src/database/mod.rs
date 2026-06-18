@@ -1,6 +1,6 @@
 use crate::datatypes::{
     AddressDetails, AddressError, AddressTags, CategoryDetails, CongDetails, DbError, GroupDetails,
-    MapDetails, StreetDetails, UserPublicDetails,
+    MapDetails, MapDisplayDetails, StreetDetails, UserPublicDetails,
 };
 use sqlx::{sqlite::SqliteConnectOptions, sqlite::SqliteRow, Pool, Row, Sqlite, SqlitePool};
 use std::str::FromStr;
@@ -291,6 +291,30 @@ impl MyDatabase {
     }
 
     // ------------------- MAPS -------------
+
+    pub async fn get_maps(&self) -> Result<Vec<MapDisplayDetails>, DbError> {
+        let query =
+            sqlx::query("SELECT maps.id AS id, maps.category AS category, maps.file_name AS file_name, categories.prefix AS prefix FROM maps INNER JOIN categories ON maps.category=categories.id");
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        match rows_result {
+            Ok(rows) => {
+                let mut maps = vec![];
+                for map in rows {
+                    let map_details_result = map_row_to_display_details(&map);
+                    match map_details_result {
+                        Ok(details) => maps.push(details),
+                        Err(_error) => {
+                            // TODO: handle error
+                        }
+                    }
+                }
+                Ok(maps)
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+    }
 
     pub async fn get_map(&self, id: u32) -> Result<MapDetails, DbError> {
         let query = sqlx::query("SELECT * FROM maps WHERE id = ?").bind(&id);
@@ -657,6 +681,22 @@ fn map_row_to_details(row: &SqliteRow) -> Result<MapDetails, sqlx::Error> {
         image: None,
         category,
         deleted: false,
+    })
+}
+
+fn map_row_to_display_details(row: &SqliteRow) -> Result<MapDisplayDetails, sqlx::Error> {
+    let id: u32 = row.try_get("id")?;
+    let id_string: String = id.to_string();
+    let prefix: String = row.try_get("prefix")?;
+    let file_name: String = row.try_get("file_name")?;
+    let category: u32 = row.try_get("category")?;
+    // TODO: use name instead of id when that is added to database
+    let display_name = format!("{}{}", prefix, id_string);
+    Ok(MapDisplayDetails {
+        id,
+        display_name,
+        file_name,
+        category,
     })
 }
 

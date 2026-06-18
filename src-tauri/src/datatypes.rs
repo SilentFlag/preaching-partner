@@ -9,10 +9,18 @@ use tokio_tungstenite::tungstenite::Message;
 use crate::{database::MyDatabase, services};
 
 // ------------------ MESSAGES SENT FROM CLIENT TO CLIENT ----------
-// #[derive(Serialize, Clone)]
-// pub enum FrontendReponse {
-//     ConfirmLogin { success: bool, name: String },
-// }
+pub enum FrontendReponse {
+    ConfirmLogin { success: bool, name: String },
+    Maps(Vec<MapDisplayDetails>),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MapDisplayDetails {
+    pub id: u32,
+    pub display_name: String,
+    pub file_name: String,
+    pub category: u32,
+}
 
 pub struct StartupState {
     pub request_rx: Mutex<Option<mpsc::Receiver<WsRequest>>>,
@@ -25,8 +33,14 @@ pub struct WsState {
 }
 
 pub struct WsRequest {
-    pub payload: ClientPayload,
-    pub response_tx: oneshot::Sender<ServerMessage>,
+    pub payload: FrontEndPayload,
+    pub response_tx: oneshot::Sender<FrontendReponse>,
+}
+
+pub enum FrontEndPayload {
+    Login { name: String, password: String },
+    MessageForServer(ClientPayload),
+    GetMaps,
 }
 
 #[derive(Clone, Debug)]

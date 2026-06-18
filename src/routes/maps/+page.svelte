@@ -1,3 +1,39 @@
+<script>
+  import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
+
+    let your_maps = [{id: null, display_name: null, file_name: null, category: null}];
+    let group_maps = [{id: null, display_name: null, file_name: null, category: null}];
+    let congregation_maps = [{id: null, display_name: null, file_name: null, category: null}];
+
+  listen('maps', event => {
+    your_maps = [];
+    group_maps = [];
+    congregation_maps = [];
+    let recieved_maps = event.payload;
+    console.log('Received maps:', recieved_maps);
+    for (let i = 0; i < recieved_maps.length; i++) {
+        console.log('Map:', recieved_maps[i]);
+        let map = recieved_maps[i];
+        let map_id = map.id;
+        let map_name = map.display_name;
+        let map_file = map.file_name;
+        let map_category = map.category;
+
+        // TODO: Display the maps in the UI
+        your_maps.push({
+            id: map_id,
+            display_name: map_name,
+            file_name: map_file,
+            category: map_category
+        });
+    }
+  });
+
+  invoke('get_maps');
+
+</script>
+
 <main class="container">
     <nav>
         <a href="/dashboard">
@@ -125,60 +161,37 @@
         <section class="maps">
             <h1>Your Maps</h1>
             <div class="maps-container">
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 1</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 2</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 3</span>
-                </a>
+                {#each your_maps as map}
+                    <a href="/maps" class="map">
+                        <img src="favicon.png" alt="placeholder">
+                        <span>{map.display_name}</span>
+                    </a>
+                {/each}
             </div>
         </section>
 
         <section class="maps">
             <h1>Group Maps</h1>
             <div class="maps-container">
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 1</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 2</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 3</span>
-                </a>
+                {#each group_maps as map}
+                    <a href="/maps" class="map">
+                        <img src="favicon.png" alt="placeholder">
+                        <span>{map.display_name}</span>
+                    </a>
+                {/each}
             </div>
         </section>
+
 
         <section class="maps">
             <h1>Congregation Maps</h1>
             <div class="maps-container">
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 1</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 2</span>
-                </a>
-
-                <a href="#" class="map">
-                    <img src="favicon.png" alt="placeholder">
-                    <span>Map 3</span>
-                </a>
+                {#each congregation_maps as map}
+                    <a href="/maps" class="map">
+                        <img src="favicon.png" alt="placeholder">
+                        <span>{map.display_name}</span>
+                    </a>
+                {/each}
             </div>
         </section>
     </div>

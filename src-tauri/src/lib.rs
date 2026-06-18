@@ -4,6 +4,7 @@ mod datatypes;
 mod networking;
 mod services;
 mod sync;
+mod tauri_commands;
 mod user_input;
 
 use datatypes::WsState;
@@ -11,7 +12,8 @@ use std::sync::Mutex;
 use tokio::sync::{broadcast, mpsc};
 
 use crate::datatypes::StartupState;
-use user_input::{app_loaded, login};
+use tauri_commands::{app_loaded, get_maps};
+use user_input::login;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -32,7 +34,7 @@ pub fn run() {
         .manage(ws_state)
         .manage(startup_state)
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![login, app_loaded])
+        .invoke_handler(tauri::generate_handler![login, app_loaded, get_maps])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app_handle, event| {

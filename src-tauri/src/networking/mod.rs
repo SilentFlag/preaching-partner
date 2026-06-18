@@ -1,6 +1,7 @@
 use crate::database::MyDatabase;
 use crate::datatypes::{
-    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest, WsSender,
+    ClientMessage, ClientPayload, DbError, FrontEndPayload, FrontendReponse, MapDisplayDetails,
+    ServerMessage, ServerPayload, WsEvent, WsRequest, WsSender,
 };
 use crate::services;
 use crate::sync::sync_with_server;
@@ -66,33 +67,47 @@ pub async fn connect_to_server(
                 // handle io messages
                 Some(req) = request_rx.recv() => {
 
-                    let client_payload: ClientPayload = req.payload.into(); // extract payload
+                    let client_payload: FrontEndPayload = req.payload.into(); // extract payload
 
                     // Check for perms to do action
                     match client_payload {
-                        ClientPayload::Login{name: _, password: _} => {
+                        FrontEndPayload::Login{name: _, password: _} => {
                             // TODO: Handle case, this should not be reached
                             continue;
                         }
-                        _ => {}
-                    }
+                        FrontEndPayload::MessageForServer(message) => {
+                            response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
 
-                    response_senders.insert(current_id, req.response_tx); // remember reponse_tx for later in hashmap
+                            let msg: ClientMessage = ClientMessage { // form message to send
+                                id: current_id,
+                                access_token: access_token,
+                                payload: message,
+                            };
+                            let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
+                            match send_result {
+                                Ok(new_token) => access_token = new_token,
+                                Err(_) => { // TODO: handle error
+                                }
+                            }
+                            current_id += 1;
 
-                    let msg: ClientMessage = ClientMessage { // form message to send
-                        id: current_id,
-                        access_token: access_token,
-                        payload: client_payload,
-                    };
-                    let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
-                    match send_result {
-                        Ok(new_token) => access_token = new_token,
-                        Err(_) => { // TODO: handle error
+                            println!("Sent server message")
+                        }
+                        FrontEndPayload::GetMaps => {
+                            let maps: Result<Vec<MapDisplayDetails>, DbError> = db.get_maps().await;
+
+                            match maps {
+                                Ok(maps) => {
+                                    let response = FrontendReponse::Maps(maps);
+                                    let _respond_result = req.response_tx.send(response);
+                                }
+                                Err(_error) => {
+                                    // TODO: Log error
+                                }
+                            }
+
                         }
                     }
-                    current_id += 1;
-
-                    println!("Sent server message")
                 }
 
                 // Handle incoming messages
@@ -115,6 +130,8 @@ pub async fn connect_to_server(
                                         // TODO: unsure why the message being unknown_error crashes it
                                         match msg.payload {
                                             ServerPayload::ConfirmLogin{success: _, refresh_token, access_token} => {
+
+                                                // TODO: Should this be removed because it should be unreachable?
 
                                                 // TODO: Handle Errors
                                                 if let Some(refresh_token_ok) = refresh_token {
@@ -148,8 +165,12 @@ pub async fn connect_to_server(
                                         } else {
                                             let response_tx = response_senders.remove(&msg.id);
                                             match response_tx {
-                                                Some(response_tx) => {
-                                                    let _ = response_tx.send(response_msg);
+                                                Some(_response_tx) => {
+                                                    match response_msg {
+                                                        // There are currently no inputs which require messages, login shouldn't reach here and sync doesn't need a response anywhere
+                                                        // let _ = response_tx.send(response);
+                                                        _ => {}
+                                                    }
                                                 }
                                                 _ => {
                                                     // TODO: handle error

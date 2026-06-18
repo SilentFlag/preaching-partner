@@ -1,6 +1,7 @@
 use crate::database::MyDatabase;
 use crate::datatypes::{
-    ClientMessage, ClientPayload, ServerMessage, ServerPayload, WsEvent, WsRequest,
+    ClientMessage, ClientPayload, FrontEndPayload, FrontendReponse, ServerMessage, ServerPayload,
+    WsEvent, WsRequest,
 };
 use crate::networking;
 use crate::services::is_logged_in;
@@ -41,19 +42,19 @@ pub async fn initiate_backend(
                     loop {
                         // wait for incoming login request from the frontend
                         if let Some(req) = request_rx.recv().await {
-                            let client_payload: ClientPayload = req.payload.into(); // extract payload
+                            let client_payload: FrontEndPayload = req.payload.into(); // extract payload
                             let response_sender = req.response_tx;
 
                             match client_payload {
-                                ClientPayload::Login {
-                                    name: _,
-                                    password: _,
-                                } => {
+                                FrontEndPayload::Login { name, password } => {
                                     // form message to send
                                     let msg: ClientMessage = ClientMessage {
                                         id: 0,
                                         access_token: None,
-                                        payload: client_payload,
+                                        payload: ClientPayload::Login {
+                                            name: name.clone(),
+                                            password,
+                                        },
                                     };
                                     let msg_bytes: Vec<u8> = rmp_serde::to_vec(&msg).unwrap();
 
@@ -122,9 +123,10 @@ pub async fn initiate_backend(
 
                                                                         // Inform frontend of login
                                                                         // TODO: Handle error
+                                                                        let response = FrontendReponse::ConfirmLogin { success, name };
                                                                         let _send_response_result =
                                                                             response_sender
-                                                                                .send(msg);
+                                                                                .send(response);
 
                                                                         // Now that we're logged in, connect to the server websocket
                                                                         networking::connect_to_server(request_rx, event_tx, db.clone(), app_handle).await;
@@ -132,9 +134,10 @@ pub async fn initiate_backend(
                                                                         break;
                                                                     } else {
                                                                         // TODO: Handle error
+                                                                        let response = FrontendReponse::ConfirmLogin { success, name };
                                                                         let _send_response_result =
                                                                             response_sender
-                                                                                .send(msg);
+                                                                                .send(response);
                                                                     }
                                                                 }
                                                                 _ => {
