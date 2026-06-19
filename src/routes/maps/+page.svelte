@@ -19,14 +19,38 @@
         let map_name = map.display_name;
         let map_file = map.file_name;
         let map_category = map.category;
+        let map_group = map.category; // TODO: map group, number for group_id or struct with cong and personal bools?
 
         // TODO: Display the maps in the UI
-        your_maps.push({
-            id: map_id,
-            display_name: map_name,
-            file_name: map_file,
-            category: map_category
-        });
+        switch (map_group) {
+            case 0:
+                your_maps.push({
+                    id: map_id,
+                    display_name: map_name,
+                    file_name: map_file,
+                    category: map_category
+                });
+                break;
+            case 1:
+                group_maps.push({
+                    id: map_id,
+                    display_name: map_name,
+                    file_name: map_file,
+                    category: map_category
+                });
+                break;
+            case 2:
+                congregation_maps.push({
+                    id: map_id,
+                    display_name: map_name,
+                    file_name: map_file,
+                    category: map_category
+                });
+                break;
+            default:
+                console.warn('Unknown map category:', map_category);
+                // TODO: Log error
+        }
     }
   });
 
@@ -158,42 +182,52 @@
     <div class="content">
         <h1>Maps</h1>
 
-        <section class="maps">
-            <h1>Your Maps</h1>
-            <div class="maps-container">
-                {#each your_maps as map}
-                    <a href="/maps" class="map">
-                        <img src="favicon.png" alt="placeholder">
-                        <span>{map.display_name}</span>
-                    </a>
-                {/each}
-            </div>
-        </section>
+        {#if (your_maps.length === 0 && group_maps.length === 0 && congregation_maps.length === 0)}
+            <p>No maps found.</p>
+        {/if}
 
-        <section class="maps">
-            <h1>Group Maps</h1>
-            <div class="maps-container">
-                {#each group_maps as map}
-                    <a href="/maps" class="map">
-                        <img src="favicon.png" alt="placeholder">
-                        <span>{map.display_name}</span>
-                    </a>
-                {/each}
-            </div>
-        </section>
+        {#if (your_maps.length !== 0)}
+            <section class="maps">
+                <h2>Your Maps</h2>
+                <div class="maps-container">
+                    {#each your_maps as map}
+                        <a href="/map_view?map_id={map.id}" class="map">
+                            <img src={map.file_name} alt="placeholder">
+                            <span>{map.display_name}</span>
+                        </a>
+                    {/each}
+                </div>
+            </section>
+        {/if}
+
+        {#if (group_maps.length !== 0)}
+            <section class="maps">
+                <h2>Town Maps</h2>
+                <div class="maps-container">
+                    {#each group_maps as map}
+                        <a href="/map_view?map_id={map.id}" class="map">
+                            <img src="maps/{map.file_name}" alt="placeholder">
+                            <span>{map.display_name}</span>
+                        </a>
+                    {/each}
+                </div>
+            </section>
+        {/if}
 
 
-        <section class="maps">
-            <h1>Congregation Maps</h1>
-            <div class="maps-container">
-                {#each congregation_maps as map}
-                    <a href="/maps" class="map">
-                        <img src="favicon.png" alt="placeholder">
-                        <span>{map.display_name}</span>
-                    </a>
-                {/each}
-            </div>
-        </section>
+        {#if (congregation_maps.length !== 0)}
+            <section class="maps">
+                <h2>Country Maps</h2>
+                <div class="maps-container">
+                    {#each congregation_maps as map}
+                        <a href="/map_view?map_id={map.id}" class="map">
+                            <img src="maps/{map.file_name}" alt="placeholder">
+                            <span>{map.display_name}</span>
+                        </a>
+                    {/each}
+                </div>
+            </section>
+        {/if}
     </div>
 </main>
 
@@ -291,7 +325,9 @@
         display: flex;
         flex-direction: column;
         align-items: start;
-        min-width: 80%;
+        box-sizing: border-box;
+        width: fit-content;
+        height: 30vh;
         border: 2px solid #cccccc;
         border-radius: 10px;
         text-align: left;
@@ -306,6 +342,16 @@
         color: black;
         text-decoration: none;
         font-size: 30px;
+        width: fit-content;
+        white-space: nowrap;
+    }
+
+    .map img {
+        height: 24vh;
+        border-bottom: 2px solid black;
+        border-radius: 10px 10px 0 0;
+        overflow: hidden;
+        object-fit: contain;
     }
 
     @media (prefers-color-scheme: dark) {

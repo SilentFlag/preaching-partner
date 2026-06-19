@@ -16,4 +16,4 @@ vite.config.ts.timestamp-*
 /database/*.db-wal
 
 #maps
-/maps/*
+/static/maps/*

@@ -184,7 +184,7 @@ async fn sync_maps(maps: Vec<MapDetails>, db: MyDatabase) -> Result<(), DbError>
 }
 
 async fn save_image(image_payload: Vec<u8>, image_name: &str) -> Result<(), ()> {
-    let new_image_file = File::create(format!("../maps/{}", image_name));
+    let new_image_file = File::create(format!("../static/maps/{}", image_name));
     if let Ok(mut image_file) = new_image_file {
         let attempt_to_write = image_file.write(&image_payload);
         if let Ok(_) = attempt_to_write {

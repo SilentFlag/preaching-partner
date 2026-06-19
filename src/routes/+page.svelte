@@ -47,6 +47,7 @@
     }
   }
 
+  // TODO: Need to invoke this when the app is done loading, not when the page is loaded
   invoke("app_loaded");
 </script>
 

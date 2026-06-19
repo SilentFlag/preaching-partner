@@ -454,6 +454,29 @@ impl MyDatabase {
 
     // ------------------- STREETS -------------
 
+    pub async fn get_streets(&self, map_id: u32) -> Result<Vec<StreetDetails>, DbError> {
+        let query = sqlx::query("SELECT * FROM streets WHERE map_id = ?").bind(&map_id);
+
+        let rows_result = query.fetch_all(&self.data).await;
+
+        let mut streets = vec![];
+
+        match rows_result {
+            Ok(rows) => {
+                for row in rows {
+                    let map_details_result = street_row_to_details(&row);
+                    match map_details_result {
+                        Ok(details) => streets.push(details),
+                        Err(error) => return Err(DbError::InvalidRow(error)),
+                    }
+                }
+            }
+            Err(error) => return Err(DbError::QueryFailure(error)),
+        }
+
+        Ok(streets)
+    }
+
     pub async fn get_street(&self, id: u32) -> Result<StreetDetails, DbError> {
         let query = sqlx::query("SELECT * FROM streets WHERE id = ?").bind(&id);
 
@@ -510,6 +533,33 @@ impl MyDatabase {
     }
 
     // ------------------- ADDRESSES -------------
+
+    pub async fn get_addresses(
+        &self,
+        streets: &Vec<StreetDetails>,
+    ) -> Result<Vec<AddressDetails>, DbError> {
+        let mut addresses = vec![];
+        for street in streets {
+            let street_id = street.id;
+            let query = sqlx::query("SELECT * FROM addresses WHERE street_id = ?").bind(street_id);
+
+            let rows_result = query.fetch_all(&self.data).await;
+
+            match rows_result {
+                Ok(rows) => {
+                    for row in rows {
+                        let address_details_result = address_row_to_details(&row);
+                        match address_details_result {
+                            Ok(details) => addresses.push(details),
+                            Err(error) => return Err(DbError::AddressFailure(error)),
+                        }
+                    }
+                }
+                Err(error) => return Err(DbError::QueryFailure(error)),
+            }
+        }
+        Ok(addresses)
+    }
 
     pub async fn get_address(&self, id: u32) -> Result<AddressDetails, DbError> {
         let query = sqlx::query("SELECT * FROM addresses WHERE id = ?").bind(&id);

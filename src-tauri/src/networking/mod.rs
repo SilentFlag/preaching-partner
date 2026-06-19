@@ -1,10 +1,11 @@
 use crate::database::MyDatabase;
 use crate::datatypes::{
-    ClientMessage, ClientPayload, DbError, FrontEndPayload, FrontendReponse, MapDisplayDetails,
-    ServerMessage, ServerPayload, WsEvent, WsRequest, WsSender,
+    ClientMessage, ClientPayload, DbError, FrontEndPayload, FrontendReponse, MapDetails,
+    MapDisplayDetails, ServerMessage, ServerPayload, WsEvent, WsRequest, WsSender,
 };
 use crate::services;
 use crate::sync::sync_with_server;
+use core::panic;
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -99,6 +100,7 @@ pub async fn connect_to_server(
                             match maps {
                                 Ok(maps) => {
                                     let response = FrontendReponse::Maps(maps);
+                                    // TODO: Handle error
                                     let _respond_result = req.response_tx.send(response);
                                 }
                                 Err(_error) => {
@@ -106,6 +108,44 @@ pub async fn connect_to_server(
                                 }
                             }
 
+                        }
+                        FrontEndPayload::GetMapDetails(map_id) => {
+                            // TODO: Error handling
+                            println!("Getting data");
+                            let details: Result<MapDetails, DbError> = db.get_map(map_id).await;
+                            match details {
+                                Ok(details) => {
+                                    let streets: Result<Vec<crate::datatypes::StreetDetails>, DbError> = db.get_streets(map_id).await;
+                                    match streets {
+                                        Ok(streets) => {
+                                            let addresses: Result<Vec<crate::datatypes::AddressDetails>, DbError> = db.get_addresses(&streets).await;
+                                            match addresses {
+                                                Ok(addresses) => {
+                                                    let response = FrontendReponse::MapDetails {
+                                                        details,
+                                                        streets,
+                                                        addresses,
+                                                    };
+                                                    let _response_result = req.response_tx.send(response);
+                                                }
+                                                Err(error) => {
+                                                    println!("Failed to get addresses details: {}", error);
+                                                    panic!();
+                                                }
+                                            }
+
+                                        }
+                                        Err(error) => {
+                                            println!("Failed to get street details: {}", error);
+                                            panic!();
+                                        }
+                                    }
+                                }
+                                Err(error) => {
+                                    println!("Failed to get map details: {}", error);
+                                    panic!();
+                                }
+                            }
                         }
                     }
                 }

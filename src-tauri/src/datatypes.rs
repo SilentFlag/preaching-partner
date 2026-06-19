@@ -10,8 +10,16 @@ use crate::{database::MyDatabase, services};
 
 // ------------------ MESSAGES SENT FROM CLIENT TO CLIENT ----------
 pub enum FrontendReponse {
-    ConfirmLogin { success: bool, name: String },
+    ConfirmLogin {
+        success: bool,
+        name: String,
+    },
     Maps(Vec<MapDisplayDetails>),
+    MapDetails {
+        details: MapDetails,
+        streets: Vec<StreetDetails>,
+        addresses: Vec<AddressDetails>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -40,6 +48,7 @@ pub struct WsRequest {
 pub enum FrontEndPayload {
     Login { name: String, password: String },
     MessageForServer(ClientPayload),
+    GetMapDetails(u32),
     GetMaps,
 }
 

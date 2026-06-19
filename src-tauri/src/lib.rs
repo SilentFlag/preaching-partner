@@ -13,7 +13,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::datatypes::StartupState;
 use tauri_commands::{app_loaded, get_maps};
-use user_input::login;
+use user_input::{get_map_data, login};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -34,14 +34,20 @@ pub fn run() {
         .manage(ws_state)
         .manage(startup_state)
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![login, app_loaded, get_maps])
+        .invoke_handler(tauri::generate_handler![
+            login,
+            app_loaded,
+            get_maps,
+            get_map_data,
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|_app_handle, event| {
+        .run(|app_handle, event| {
             match event {
                 tauri::RunEvent::Exit => {
                     // Your final cleanup code goes here
                     println!("Tauri app is exiting. Performing final cleanup.");
+                    app_handle.exit(0);
                 }
                 // Match other events or use a wildcard arm for non-exhaustive enum
                 _ => {}
