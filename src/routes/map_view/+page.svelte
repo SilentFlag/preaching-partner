@@ -2,6 +2,8 @@
     import { invoke } from '@tauri-apps/api/core';
     import { listen } from '@tauri-apps/api/event';
 
+    let streets = [{ name: 'Street Name', addresses: ['Address 1', 'Address 2'] }];
+
     let params = new URLSearchParams(window.location.search);
     let map_id = Number(params.get('map_id'));
     console.log('Map ID from URL:', map_id, typeof map_id);
@@ -9,6 +11,12 @@
     listen('map_data_loaded', event => {
         map_data = event.payload;
         console.log('Map data loaded:', map_data);
+        // let details = map_data[0];
+        // let streets = map_data[1]
+        // let addresses = map_data[2];
+        
+        
+        
     });
 
     let map_data = invoke('get_map_data', { mapId: map_id });
@@ -139,6 +147,20 @@
 
     <div class="content">
         <h1>Insert Map Name</h1>
+        <img src="path/to/your/image.jpg" alt="Map"/>
+
+        <!-- TODO: make these expandable/collapsable -->
+        {#each streets as street}
+            <div class="street">
+                <h2>{street.name}</h2>
+                <ul>
+                    {#each street.addresses as address}
+                        <li>{address}</li>
+                    {/each}
+                </ul>
+            </div>
+        {/each}
+
     </div>
 </main>
 

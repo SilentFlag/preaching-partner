@@ -6,6 +6,18 @@ use crate::datatypes::{WsRequest, WsState};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::oneshot;
 
+/// Called when the frontend has loaded.
+/// Extracts sender and receiver from state and calls core::initiate_backend() with them
+///
+/// Parameters:
+///     state: State
+///     app_handle: AppHandle
+///
+/// Return Value:
+///     Ok(())
+///     Err(())
+///
+/// TODO: check if backend successfully started, if not, inform user with error
 #[tauri::command]
 pub async fn app_loaded(state: State<'_, StartupState>, app_handle: AppHandle) -> Result<(), ()> {
     let request_rx = {
@@ -23,6 +35,15 @@ pub async fn app_loaded(state: State<'_, StartupState>, app_handle: AppHandle) -
     Ok(())
 }
 
+/// Called when the frontend wants the data of all maps
+///
+/// Return Value:
+///     Returns the map data to the frontend in the form of FrontendReponse::Maps
+///
+/// Errors:
+/// Sending message to the networking
+/// Invalid response from networking
+/// Sending message to the frontend
 #[tauri::command]
 pub async fn get_maps(app: AppHandle, state: State<'_, WsState>) -> Result<(), String> {
     let (tx, rx) = oneshot::channel();
@@ -45,7 +66,7 @@ pub async fn get_maps(app: AppHandle, state: State<'_, WsState>) -> Result<(), S
         match msg {
             FrontendReponse::Maps(maps) => maps,
             _ => {
-                // TODO: Handle this case
+                // TODO: Handle this case, it should never be reached
                 println!("Unexpected message from server");
                 vec![]
             }

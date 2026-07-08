@@ -10,6 +10,18 @@ use reqwest::Client as HttpClient;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::{broadcast, mpsc};
 
+/// Start running backend code once the frontend has loaded
+/// Open the database and check if the user is logged in:
+/// TRUE:
+///     if so, run networking::connect_to_server()
+///
+/// False:
+///     Wait for a login attempt from the frontend, attempt to login, check if successful:
+///         TRUE: run networking::connect_to_server()
+///         FALSE: repeat
+///
+/// TODO: Error handling
+///
 pub async fn initiate_backend(
     mut request_rx: mpsc::Receiver<WsRequest>,
     event_tx: broadcast::Sender<WsEvent>,

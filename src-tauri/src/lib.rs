@@ -1,10 +1,18 @@
+/// Startup functions for the app
 mod core;
+/// Database abstraction and functions
 mod database;
+/// Custom datatypes
 mod datatypes;
+/// Websocket networking for users that are logged in
 mod networking;
+///
 mod services;
+/// Functions related to syncing the user when they come online
 mod sync;
+/// Functions called by the front end without user input
 mod tauri_commands;
+/// Functions called by the front end as a result of user input
 mod user_input;
 
 use datatypes::WsState;
@@ -15,6 +23,7 @@ use crate::datatypes::StartupState;
 use tauri_commands::{app_loaded, get_maps};
 use user_input::{get_map_data, login};
 
+/// Initialise and run the app, this function is run by the main.rs entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (request_tx, request_rx) = mpsc::channel(32);
