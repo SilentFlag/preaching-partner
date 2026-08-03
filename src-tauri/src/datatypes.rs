@@ -219,6 +219,7 @@ pub struct GroupDetails {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MapDetails {
     pub id: u32,
+    pub name: String,
     pub image_name: String,
     pub assignee: u32,
     pub assigner: u32,

@@ -294,7 +294,7 @@ impl MyDatabase {
 
     pub async fn get_maps(&self) -> Result<Vec<MapDisplayDetails>, DbError> {
         let query =
-            sqlx::query("SELECT maps.id AS id, maps.category AS category, maps.file_name AS file_name, categories.prefix AS prefix FROM maps INNER JOIN categories ON maps.category=categories.id");
+            sqlx::query("SELECT maps.id AS id, maps.name AS name, maps.category AS category, maps.file_name AS file_name, categories.prefix AS prefix FROM maps INNER JOIN categories ON maps.category=categories.id");
 
         let rows_result = query.fetch_all(&self.data).await;
 
@@ -342,6 +342,7 @@ impl MyDatabase {
         &self,
         MapDetails {
             id,
+            name,
             image_name,
             assignee,
             assigner,
@@ -351,9 +352,10 @@ impl MyDatabase {
         }: &MapDetails,
     ) -> Result<(), DbError> {
         let insert_token_query = sqlx::query(
-            "INSERT INTO maps(id, assignee, assigner, category, file_name) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO maps(id, name, assignee, assigner, category, file_name) VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
+        .bind(name)
         .bind(assignee)
         .bind(assigner)
         .bind(category)
@@ -371,6 +373,7 @@ impl MyDatabase {
         &self,
         MapDetails {
             id,
+            name,
             image_name,
             assignee,
             assigner,
@@ -382,7 +385,8 @@ impl MyDatabase {
         let insert_token_query = if *deleted {
             sqlx::query("DELETE FROM maps WHERE id = ?").bind(id)
         } else {
-            sqlx::query("UPDATE maps SET file_name = ?, assignee = ?, assigner = ?, category = ? WHERE id = ?")
+            sqlx::query("UPDATE maps SET name = ?, file_name = ?, assignee = ?, assigner = ?, category = ? WHERE id = ?")
+                .bind(name)
                 .bind(image_name)
                 .bind(assignee)
                 .bind(assigner)
@@ -719,12 +723,14 @@ fn user_row_to_details(row: &SqliteRow) -> Result<UserPublicDetails, sqlx::Error
 
 fn map_row_to_details(row: &SqliteRow) -> Result<MapDetails, sqlx::Error> {
     let id = row.try_get("id")?;
+    let name = row.try_get("name")?;
     let assignee: u32 = row.try_get("assignee")?;
     let assigner: u32 = row.try_get("assigner")?;
     let image_name: String = row.try_get("file_name")?;
     let category: u32 = row.try_get("category")?;
     Ok(MapDetails {
         id,
+        name,
         image_name,
         assignee,
         assigner,
@@ -736,12 +742,10 @@ fn map_row_to_details(row: &SqliteRow) -> Result<MapDetails, sqlx::Error> {
 
 fn map_row_to_display_details(row: &SqliteRow) -> Result<MapDisplayDetails, sqlx::Error> {
     let id: u32 = row.try_get("id")?;
-    let id_string: String = id.to_string();
+    let display_name: String = row.try_get("name")?;
     let prefix: String = row.try_get("prefix")?;
     let file_name: String = row.try_get("file_name")?;
     let category: u32 = row.try_get("category")?;
-    // TODO: use name instead of id when that is added to database
-    let display_name = format!("{}{}", prefix, id_string);
     Ok(MapDisplayDetails {
         id,
         display_name,

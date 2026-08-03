@@ -1,60 +1,74 @@
 <script>
+    import { show } from '@tauri-apps/api/app';
   import { invoke } from '@tauri-apps/api/core';
   import { listen } from '@tauri-apps/api/event';
+    
+    let maps = [{id: null, display_name: "", file_name: "", category: null, streets: [""]}];
+    let filtered_maps = $state([{id: null, display_name: "", file_name: "", category: null, streets: [""]}]);
 
-    let your_maps = [{id: null, display_name: null, file_name: null, category: null}];
-    let group_maps = [{id: null, display_name: null, file_name: null, category: null}];
-    let congregation_maps = [{id: null, display_name: null, file_name: null, category: null}];
+    let search_query = $state("");
 
   listen('maps', event => {
-    your_maps = [];
-    group_maps = [];
-    congregation_maps = [];
     let recieved_maps = event.payload;
+    maps = [];
     console.log('Received maps:', recieved_maps);
     for (let i = 0; i < recieved_maps.length; i++) {
         console.log('Map:', recieved_maps[i]);
         let map = recieved_maps[i];
         let map_id = map.id;
         let map_name = map.display_name;
-        let map_file = map.file_name;
+        let map_file = "maps/" + map.file_name;
         let map_category = map.category;
         let map_group = map.category; // TODO: map group, number for group_id or struct with cong and personal bools?
 
-        // TODO: Display the maps in the UI
-        switch (map_group) {
-            case 0:
-                your_maps.push({
-                    id: map_id,
-                    display_name: map_name,
-                    file_name: map_file,
-                    category: map_category
-                });
-                break;
-            case 1:
-                group_maps.push({
-                    id: map_id,
-                    display_name: map_name,
-                    file_name: map_file,
-                    category: map_category
-                });
-                break;
-            case 2:
-                congregation_maps.push({
-                    id: map_id,
-                    display_name: map_name,
-                    file_name: map_file,
-                    category: map_category
-                });
-                break;
-            default:
-                console.warn('Unknown map category:', map_category);
-                // TODO: Log error
-        }
+        maps.push({
+            id: map_id,
+            display_name: map_name,
+            file_name: map_file,
+            category: map_category,
+            streets: [], // TODO: get list of street names
+        });
     }
+    filtered_maps = maps;
+    console.log(maps);
   });
 
   invoke('get_maps');
+
+  function show_search() {
+    document.getElementById("search")?.classList.remove("hide");
+    document.getElementById("show_search")?.classList.add("hide");
+  }
+
+  function close_search() {
+    document.getElementById("search")?.classList.add("hide");
+    document.getElementById("show_search")?.classList.remove("hide");
+  }
+
+  // Filter maps by what is in search field
+  function search_maps() {
+    let query = search_query;
+    console.log("searching" + query);
+    filtered_maps = [];
+    if (typeof(query) === 'string') {
+        for (let i = 0; i < maps.length; i++) {
+            let map = maps[i];
+            if (map.display_name.includes(query)) {
+                filtered_maps.push(map);
+
+            } else {
+                for (let i = 0; i < map.streets.length; i++) {
+                    let street = map.streets[i];
+                    if (street.includes(query)) {
+                        filtered_maps.push(map);
+                    }
+                }
+            }
+        }
+    } else {
+        // TODO: Handle error of search failing
+    }
+  }
 
 </script>
 
@@ -179,55 +193,33 @@
         </a>
     </nav>
 
-    <div class="content">
-        <h1>Maps</h1>
+    <!-- Header Nav -->
+    <header>
+        <div>
+            <h1>Maps</h1>
+            <form id="search" onsubmit={search_maps}>
+                <input type="text" name="search" id="search" bind:value={search_query}>
+                <button onclick={search_maps} id='show_search'><svg height="200px" width="200px" version="1.1" id="_x32_" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" xml:space="preserve" fill="#000000"><g stroke-width="0"></g><g stroke-linecap="round" stroke-linejoin="round"></g><g> <style type="text/css"> .st0{fill:#000000;} </style> <g> <path class="st0" d="M172.625,102.4c-42.674,0-77.392,34.739-77.392,77.438c0,5.932,4.806,10.74,10.733,10.74 c5.928,0,10.733-4.808,10.733-10.74c0-30.856,25.088-55.959,55.926-55.959c5.928,0,10.733-4.808,10.733-10.74 C183.358,107.208,178.553,102.4,172.625,102.4z"></path> <path class="st0" d="M361.657,301.511c19.402-30.436,30.645-66.546,30.645-105.244C392.302,88.036,304.318,0,196.151,0 c-38.676,0-74.765,11.25-105.182,30.663C66.734,46.123,46.11,66.759,30.659,91.008C11.257,121.444,0,157.568,0,196.267 c0,108.217,87.998,196.266,196.151,196.266c38.676,0,74.779-11.264,105.197-30.677C325.582,346.396,346.206,325.76,361.657,301.511 z M259.758,320.242c-19.075,9.842-40.708,15.403-63.607,15.403c-76.797,0-139.296-62.535-139.296-139.378 c0-22.912,5.558-44.558,15.394-63.644c13.318-25.856,34.483-47.019,60.323-60.331c19.075-9.842,40.694-15.403,63.578-15.403 c76.812,0,139.296,62.521,139.296,139.378c0,22.898-5.558,44.53-15.394,63.616C306.749,285.739,285.598,306.916,259.758,320.242z"></path> <path class="st0" d="M499.516,439.154L386.275,326.13c-16.119,23.552-36.771,44.202-60.309,60.345l113.241,113.024 c8.329,8.334,19.246,12.501,30.148,12.501c10.916,0,21.833-4.167,30.162-12.501C516.161,482.83,516.161,455.822,499.516,439.154z"></path> </g> </g></svg></button>
+            </form>
+        </div>
+    </header>
 
-        {#if (your_maps.length === 0 && group_maps.length === 0 && congregation_maps.length === 0)}
+    <div class="content">
+        {#if (filtered_maps.length === 0)}
             <p>No maps found.</p>
         {/if}
 
-        {#if (your_maps.length !== 0)}
-            <section class="maps">
-                <h2>Your Maps</h2>
-                <div class="maps-container">
-                    {#each your_maps as map}
-                        <a href="/map_view?map_id={map.id}" class="map">
-                            <img src={map.file_name} alt="placeholder">
-                            <span>{map.display_name}</span>
-                        </a>
-                    {/each}
-                </div>
-            </section>
-        {/if}
+        <section class="maps">
+            <div class="maps-container">
+                {#each filtered_maps as map}
+                    <a href="/map_view?map_id={map.id}" class="map">
+                        <img src={map.file_name} alt="placeholder">
+                        <span>{map.display_name}</span>
+                    </a>
+                {/each}
+            </div>
+        </section>
 
-        {#if (group_maps.length !== 0)}
-            <section class="maps">
-                <h2>Town Maps</h2>
-                <div class="maps-container">
-                    {#each group_maps as map}
-                        <a href="/map_view?map_id={map.id}" class="map">
-                            <img src="maps/{map.file_name}" alt="placeholder">
-                            <span>{map.display_name}</span>
-                        </a>
-                    {/each}
-                </div>
-            </section>
-        {/if}
-
-
-        {#if (congregation_maps.length !== 0)}
-            <section class="maps">
-                <h2>Country Maps</h2>
-                <div class="maps-container">
-                    {#each congregation_maps as map}
-                        <a href="/map_view?map_id={map.id}" class="map">
-                            <img src="maps/{map.file_name}" alt="placeholder">
-                            <span>{map.display_name}</span>
-                        </a>
-                    {/each}
-                </div>
-            </section>
-        {/if}
     </div>
 </main>
 
@@ -250,7 +242,7 @@
 
     .container {
         margin: 0;
-        padding-top: 10vh;
+        padding-top: 0;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -301,24 +293,72 @@
         color: black;
     }
 
-    .maps {
-        margin-top: 20px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        text-align: left;
-        padding: 10px;
-        box-sizing: border-box;
+    header {
         background-color: #dadada;
-        border: 2px solid #cccccc;
-        border-radius: 10px;
+        border-bottom: 2px solid #cccccc;
+        text-align: center;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+    }
+
+    header div {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    header div button {
+        margin-top: 5px;
+        margin-right: 0.5em;
+        padding: 5px;
+    }
+
+    header h1 {
+        padding-left: 0.5em;
+    }
+
+    header svg {
+        display: block;
+        width: 30px;
+        height: 30px;
+        margin: 0;
+    }
+
+    header input {
+        font-size: 20px;
+        margin: 2px;
+    }
+
+    header form {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        padding-top: 5px;
+        padding-right: 0.5em;
+    }
+
+    header form button {
+        display: block;
+        width: 40px;
+        height: 40px;
+        margin: 2px;
+        padding: 3px;
+        font-size: 30px;
+        line-height: 0%;
+        font-weight: bold;
+    }
+
+    .maps {
+        padding: 100px 0 50px 0;
     }
 
     .maps-container {
         display: flex;
-        flex-direction: row;
+        flex-direction: column;
         gap: 10px;
-        overflow-x: auto;
     }
 
     .map {
@@ -327,11 +367,11 @@
         align-items: start;
         box-sizing: border-box;
         width: fit-content;
-        height: 30vh;
         border: 2px solid #cccccc;
         border-radius: 10px;
         text-align: left;
         text-decoration: none;
+        width: 100%;
     }
     
     .map span {
@@ -347,11 +387,12 @@
     }
 
     .map img {
-        height: 24vh;
+        /* height: 24vh; */
         border-bottom: 2px solid black;
         border-radius: 10px 10px 0 0;
         overflow: hidden;
         object-fit: contain;
+        max-width: 100%;
     }
 
     @media (prefers-color-scheme: dark) {
