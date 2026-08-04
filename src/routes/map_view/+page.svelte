@@ -1,29 +1,40 @@
 <script>
-    import { invoke } from '@tauri-apps/api/core';
-    import { listen } from '@tauri-apps/api/event';
+    import { invoke } from "@tauri-apps/api/core";
+    import { listen } from "@tauri-apps/api/event";
 
     // TODO: use associative array instead
-    let streets = $state([{ id: 0, name: 'Street Name', addresses: [{id: 0, checked: true, number: 'Address 1'}, {id: 1, checked: false, number: 'Address 1'}] }]);
-    let map_name = $state("Error: Map name not found");
-    let map_image = $state("image");
+    let streets_index = [];
+    let streets = $state([
+        {
+            id: 0,
+            name: "Street Name",
+            addresses: [
+                { id: 0, checked: true, number: "Address 1" },
+                { id: 1, checked: false, number: "Address 1" },
+            ],
+        },
+    ]);
+
+    /**
+     * @type {number[]}
+     */
+    let address_index = [];
+    let addresses_store = [[]];
+
+    let addresses_ascending = 0;
+
+    let map_name = $state("Error: Map not found");
+    let map_image = $state("");
 
     let params = new URLSearchParams(window.location.search);
-    let map_id = Number(params.get('map_id'));
-    console.log('Map ID from URL:', map_id, typeof map_id);
+    let map_id = Number(params.get("map_id"));
 
-    listen('map_data_loaded', event => {
+    listen("map_data_loaded", (event) => {
         streets = [];
         let map_data = event.payload;
-        console.log('Map data loaded:', map_data);
         let details = map_data[0];
-        let streets_tmp = map_data[1]
+        let streets_tmp = map_data[1];
         let addresses_tmp = map_data[2];
-
-        /**
-         * @type {string | any[]}
-         */
-        let address_index = [];
-        let addresses_store = [[]];
 
         for (let i = 0; i < addresses_tmp.length; i++) {
             let address = addresses_tmp[i];
@@ -32,29 +43,28 @@
                 address_index.push(street_id);
                 addresses_store.push([]);
             }
-            let store_index = address_index.indexOf(street_id)
+            let store_index = address_index.indexOf(street_id);
             // @ts-ignore
             addresses_store[store_index].push(address);
         }
-
 
         for (let i = 0; i < streets_tmp.length; i++) {
             let id = streets_tmp[i].id;
             let name = streets_tmp[i].name;
 
+            streets_index.push(id);
             streets.push({
                 id: id,
                 name: name,
                 addresses: addresses_store[address_index.indexOf(id)],
             });
         }
-        
+
         map_name = details.name;
         map_image = "maps/" + details.image_name;
-        
     });
 
-    let map_data = invoke('get_map_data', { mapId: map_id });
+    let map_data = invoke("get_map_data", { mapId: map_id });
 
     /**
      * @param {number} id
@@ -69,8 +79,9 @@
      * @param {number} street_id
      */
     function collapseStreet(street_id) {
-        console.log("collapse " + street_id);
-        let street_element = document.getElementById(street_id.toString() + "street");
+        let street_element = document.getElementById(
+            street_id.toString() + "street",
+        );
         if (street_element?.classList.contains("collapsed")) {
             street_element.classList.remove("collapsed");
         } else {
@@ -78,6 +89,77 @@
         }
     }
 
+    /**
+     * @param {number} filter
+     */
+    function updateFilter(filter) {
+        switch (filter) {
+            case 0:
+                streets.forEach(street => {
+                    street.addresses = addresses_store[address_index.indexOf(street.id)]
+                });
+                updateOrder(addresses_ascending);
+                break;
+            case 1:
+                streets.forEach(street => {
+                    if (street.addresses != undefined && street.addresses.length > 0) {
+                        /**
+                         * @type {any[]}
+                         */
+                        let tmp_street_addresses = addresses_store[address_index.indexOf(street.id)]
+                        let odd_addresses = tmp_street_addresses.filter(address => {
+                            let number = parseInt(address.number)
+                            return number % 2 === 1
+                        })
+                        street.addresses = odd_addresses;
+                    }
+                });
+                updateOrder(addresses_ascending);
+                break;
+            case 2:
+                streets.forEach(street => {
+                    if (street.addresses != undefined && street.addresses.length > 0) {
+                        /**
+                         * @type {any[]}
+                         */
+                        let tmp_street_addresses = addresses_store[address_index.indexOf(street.id)]
+                        let even_addresses = tmp_street_addresses.filter(address => {
+                            let number = parseInt(address.number)
+                            return number % 2 === 0
+                        })
+                        street.addresses = even_addresses;
+                    }
+                });
+                updateOrder(addresses_ascending);
+                break;
+            default:
+                // TODO: Log Error
+        }
+    }
+
+    /**
+     * 
+     * @param {number} order
+     */
+    function updateOrder(order) {
+        if (order === 0) {
+            streets.forEach(street => {
+                if (street.addresses != undefined && street.addresses.length > 0) {
+                    street.addresses.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+                }
+            });
+            addresses_ascending = 0;
+        } else if (order === 1) {
+            streets.forEach(street => {
+                if (street.addresses != undefined && street.addresses.length > 0) {
+                    street.addresses.sort((a, b) => parseInt(b.number) - parseInt(a.number));
+                }
+            });
+            addresses_ascending = 1;
+        } else {
+            // TODO: Log Error
+        }
+    }
 </script>
 
 <main class="container">
@@ -203,189 +285,66 @@
 
     <header>
         <div>
-        <a href="/maps">&larr;</a>
+            <a href="/maps">&larr;</a>
             <h1>{map_name}</h1>
         </div>
     </header>
 
     <div class="content">
-        <img src={map_image} alt="Map"/>
+        <img src={map_image} alt="Map" />
+
+        <div class="filters">
+            <select id="filter" onchange={e => updateFilter(parseInt(e.currentTarget.value))}>
+                <option value="0">All Numbers</option>
+                <option value="1">Odd</option>
+                <option value="2">Even</option>
+            </select>
+            <select id="order" onchange={e => updateOrder(parseInt(e.currentTarget.value))}>
+                <option value="0">Ascending</option>
+                <option value="1">Descending</option>
+            </select>
+        </div>
+        
 
         <!-- TODO: make these expandable/collapsable -->
         {#each streets as street}
             <div class="street" id="{street.id.toString()}street">
-                <button class="title" onclick={(e) => collapseStreet(street.id)}>
+                <button
+                    class="title"
+                    onclick={(e) => collapseStreet(street.id)}
+                >
                     <span style="rotate: 90deg">></span>
                     <h2>{street.name}</h2>
                 </button>
-                
+
                 <!-- TODO: change to table -->
-                {#each street.addresses as address}
-                    <table>
-                        <tbody>
+                <table>
+                    <tbody>
+                        {#each street.addresses as address}
                             <tr>
-                                <td><input type="checkbox" id={address.id.toString()} checked={address.checked} onclick={(e) => updateCheckbox(street.id, address.id, e.currentTarget.checked)}></td>
+                                <td
+                                    ><input
+                                        type="checkbox"
+                                        id={address.id.toString()}
+                                        checked={address.checked}
+                                        onclick={(e) =>
+                                            updateCheckbox(
+                                                street.id,
+                                                address.id,
+                                                e.currentTarget.checked,
+                                            )}
+                                    /></td
+                                >
                                 <td>{address.number}</td>
                             </tr>
-                        </tbody>
-                    </table>
-                {/each}
+                        {/each}
+                    </tbody>
+                </table>
             </div>
         {/each}
-
     </div>
 </main>
 
 <style>
-    :root {
-        font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-        font-size: 16px;
-        line-height: 24px;
-        font-weight: 400;
-
-        color: #0f0f0f;
-        background-color: #f6f6f6;
-
-        font-synthesis: none;
-        text-rendering: optimizeLegibility;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-        -webkit-text-size-adjust: 100%;
-    }
-
-    .container {
-        margin: 0;
-        padding-top: 10vh;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        text-align: center;
-        margin-bottom: 100px;
-    }
-
-    .content {
-        width: 80%;
-        margin: 0 auto;
-    }
-
-    h1 {
-        text-align: center;
-    }
-
-    nav {
-        border-top: 2px solid #cccccc;
-        overflow: hidden;
-        background-color: #dadada;
-        position: fixed;
-        bottom: 0;
-        width: 100%;
-        display: flex;
-        justify-content: space-evenly;
-        flex-direction: row;
-    }
-
-    nav a {
-        float: left;
-        display: block;
-        color: #000000;
-        text-align: center;
-        padding: 14px 16px;
-        text-decoration: none;
-        font-size: 17px;
-    }
-
-    nav a svg {
-        width: 24px;
-        height: 24px;
-        display: block;
-        margin: 0 auto 4px;
-    }
-
-    nav a:hover {
-        background: #f1f1f1;
-        color: black;
-    }
-
-    header {
-        background-color: #dadada;
-        border-bottom: 2px solid #cccccc;
-        text-align: center;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-    }
-
-    header div {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
-    }
-
-    header div a {
-        margin-top: 5px;
-        margin-left: 0.5em;
-        padding: 13px 15px 23px 15px;
-        line-height: 0;
-        color: black;
-        background-color: white;
-        border-radius: 5px;
-        border: 1px solid #cccccc;
-        font-size: 2em;
-        text-decoration: none;
-    }
-
-    header h1 {
-        padding-right: 0.5em;
-    }
-
-    .content img {
-        max-width: 100%;
-    }
-
-    .street .title {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: start;
-        font-size: 1em;
-    }
-
-    .street span {
-        padding: 5px;
-        font-weight: bold;
-        font-size: 1.5em;
-    }
-
-    table input[type=checkbox] {
-        display: block;
-        width: 20px;
-        height: 20px;
-    }
-
-    .content :global {
-        /* .collapsed {
-            background-color: red;
-        } */
-
-        .collapsed button span {
-            rotate: 0deg !important;
-        }
-
-        .collapsed table {
-            display: none;
-        }
-    }
-
-    @media (prefers-color-scheme: dark) {
-        :root {
-            color: #f6f6f6;
-            background-color: #2f2f2f;
-        }
-
-        a:hover {
-            color: #24c8db;
-        }
-    }
+    @import "./map_view.css";
 </style>
