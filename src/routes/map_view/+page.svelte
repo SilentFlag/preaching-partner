@@ -68,11 +68,11 @@
 
     /**
      * @param {number} id
-     * @param {number} street_id
      * @param {boolean} checked
      */
-    function updateCheckbox(street_id, id, checked) {
+    async function updateCheckbox(id, checked) {
         console.log("Checkbox " + id.toString() + " is " + checked);
+        await invoke('complete_address', { id: id, checked: checked });
     }
 
     /**
@@ -329,7 +329,6 @@
                                         checked={address.checked}
                                         onclick={(e) =>
                                             updateCheckbox(
-                                                street.id,
                                                 address.id,
                                                 e.currentTarget.checked,
                                             )}

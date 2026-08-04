@@ -106,3 +106,55 @@ pub async fn get_map_data(
 
     Ok(())
 }
+
+
+#[tauri::command]
+pub async fn complete_address(
+    app_handle: AppHandle,
+    state: State<'_, WsState>,
+    id: u32,
+    checked: bool,
+) -> Result<(), String> {
+    let (tx, rx) = oneshot::channel();
+    let msg = crate::datatypes::FrontEndPayload::CompleteAddress {
+        id,
+        checked,
+    };
+    let request = WsRequest {
+        payload: msg,
+        response_tx: tx,
+    };
+
+    let sent_mess = state
+        .request_tx
+        .send(request)
+        .await;
+
+    println!("message sent something {:?}", sent_mess);
+
+    let response: Result<FrontendReponse, String> = rx.await.map_err(|e| e.to_string());
+    // TODO: handle error case
+    let success = if let Ok(msg) = response {
+        match msg {
+            FrontendReponse::ConfirmLogin { success, .. } => success,
+            _ => {
+                // TODO: Handle this case
+                println!("Unexpected message from server");
+                false
+            }
+        }
+    } else {
+        // TODO: handle recieving message fail
+        false
+    };
+
+    let emission_result = app_handle.emit("login", success).map_err(|e| e.to_string());
+    if let Err(error) = emission_result {
+        println!(
+            "There was an error sending a message to the frontend: {}",
+            error
+        );
+    }
+
+    Ok(())
+}

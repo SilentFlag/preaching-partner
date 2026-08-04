@@ -47,6 +47,7 @@ pub struct WsRequest {
 
 pub enum FrontEndPayload {
     Login { name: String, password: String },
+    CompleteAddress { id: u32, checked: bool },
     MessageForServer(ClientPayload),
     GetMapDetails(u32),
     GetMaps,
@@ -160,10 +161,9 @@ pub struct ClientMessage {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ClientPayload {
     Login { name: String, password: String },
-    UpdateCheckbox { map: i32, id: i32, checked: bool },
-    UpdateCheckboxDetails { map: i32, id: i32, name: String },
     RequestAccessToken([u8; 32]),
     RequestSync(u32),
+    CompleteAddress { id: u32, checked: bool },
 }
 
 // ------------------ MESSAGES SENT FROM SERVER TO CLIENT ----------
@@ -183,6 +183,7 @@ pub enum ServerPayload {
     },
     SyncInformation(SyncInformation),
     NewAccessToken([u8; 32]),
+    AddressCompleted { id: u32, checked: bool },
     UnknownError,
 }
 

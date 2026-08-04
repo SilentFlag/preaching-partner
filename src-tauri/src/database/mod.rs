@@ -628,6 +628,23 @@ impl MyDatabase {
         Ok(())
     }
 
+    pub async fn update_address_checked(
+        &self,
+        id: u32,
+        checked: bool,
+    ) -> Result<(), DbError> {
+        let insert_token_query = sqlx::query("UPDATE addresses SET visited = ? WHERE id = ?")
+            .bind(checked)
+            .bind(id);
+
+        let query_result = insert_token_query.execute(&self.data).await;
+
+        if let Err(result) = query_result {
+            return Err(DbError::QueryFailure(result));
+        }
+        Ok(())
+    }
+
     // ------------------- LOGGING -------------
 
     pub async fn add_log(&self, code: u32, message: &str, timestamp: u32) -> Result<(), DbError> {

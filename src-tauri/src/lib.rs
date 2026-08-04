@@ -21,7 +21,7 @@ use tokio::sync::{broadcast, mpsc};
 
 use crate::datatypes::StartupState;
 use tauri_commands::{app_loaded, get_maps};
-use user_input::{get_map_data, login};
+use user_input::{get_map_data, login, complete_address};
 
 /// Initialise and run the app, this function is run by the main.rs entry point
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -48,6 +48,7 @@ pub fn run() {
             app_loaded,
             get_maps,
             get_map_data,
+            complete_address,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

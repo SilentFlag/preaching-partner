@@ -84,6 +84,7 @@ pub async fn connect_to_server(
                                 access_token: access_token,
                                 payload: message,
                             };
+                            // TODO: where does the new_token come from?
                             let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
                             match send_result {
                                 Ok(new_token) => access_token = new_token,
@@ -147,6 +148,19 @@ pub async fn connect_to_server(
                                 }
                             }
                         }
+                        FrontEndPayload::CompleteAddress{id, checked} => {
+                            let msg: ClientMessage = ClientMessage {
+                                id: current_id,
+                                access_token: access_token,
+                                payload: ClientPayload::CompleteAddress{id, checked},
+                            };
+                            let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
+                            match send_result {
+                                Ok(new_token) => access_token = new_token,
+                                Err(_) => { // TODO: handle error
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -188,6 +202,12 @@ pub async fn connect_to_server(
                                                     // TODO: handle error
                                                 }
                                             }
+                                            ServerPayload::AddressCompleted{id, checked} => {
+                                                let result = services::check_address(db.clone(), id, checked).await;
+                                                if let Err(_error) = result {
+                                                    // TODO: handle error
+                                                }
+                                            }
                                             _ => {
                                                 // TODO: log unexpected message
                                                 println!("unexpected message");
@@ -214,6 +234,7 @@ pub async fn connect_to_server(
                                                 }
                                                 _ => {
                                                     // TODO: handle error
+                                                    // NOTE: this will be printed when checking an address. A message will be sent to the frontend from the server response in the future to uncheck the box and warn the user if there was an error.
                                                     println!("failed to find response tx for server message");
                                                 }
                                             }

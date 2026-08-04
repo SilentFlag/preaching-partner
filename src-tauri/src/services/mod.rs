@@ -29,3 +29,7 @@ pub async fn get_access_token(db: MyDatabase) -> Option<[u8; 32]> {
         },
     }
 }
+
+pub async fn check_address(db: MyDatabase, id: u32, checked: bool) -> Result<(), DbError> {
+    db.update_address_checked(id, checked).await
+}
