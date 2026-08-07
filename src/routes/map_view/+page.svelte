@@ -2,26 +2,23 @@
     import { invoke } from "@tauri-apps/api/core";
     import { listen } from "@tauri-apps/api/event";
 
-    // TODO: use associative array instead
     let streets_index = [];
     let streets = $state([
         {
             id: 0,
             name: "Street Name",
             addresses: [
-                { id: 0, checked: true, number: "Address 1" },
-                { id: 1, checked: false, number: "Address 1" },
+                { id: 0, visited: true, number: "Address 1" },
+                { id: 1, visited: false, number: "Address 1" },
             ],
         },
     ]);
 
-    /**
-     * @type {number[]}
-     */
-    let address_index = [];
-    let addresses_store = [[]];
+    let addresses_street_map = new Map();
+    let addresses_map = new Map();
 
     let addresses_ascending = 0;
+    let filter_value = 0;
 
     let map_name = $state("Error: Map not found");
     let map_image = $state("");
@@ -39,13 +36,11 @@
         for (let i = 0; i < addresses_tmp.length; i++) {
             let address = addresses_tmp[i];
             let street_id = address.street_id;
-            if (!address_index.includes(street_id)) {
-                address_index.push(street_id);
-                addresses_store.push([]);
+            if (!addresses_street_map.has(street_id)) {
+                addresses_street_map.set(street_id, []);
             }
-            let store_index = address_index.indexOf(street_id);
-            // @ts-ignore
-            addresses_store[store_index].push(address);
+            addresses_street_map.get(street_id).push(address);
+            addresses_map.set(address.id, address);
         }
 
         for (let i = 0; i < streets_tmp.length; i++) {
@@ -56,7 +51,7 @@
             streets.push({
                 id: id,
                 name: name,
-                addresses: addresses_store[address_index.indexOf(id)],
+                addresses: addresses_street_map.get(id) || [],
             });
         }
 
@@ -65,6 +60,20 @@
     });
 
     let map_data = invoke("get_map_data", { mapId: map_id });
+
+    listen("complete_address", (event) => {
+        let address_id = event.payload.address_id;
+        let checked = event.payload.checked;
+
+        if (addresses_map.has(address_id)) {
+            addresses_map.get(address_id).checked = checked;
+            addresses_street_map.set(
+                addresses_map.get(address_id).street_id,
+                addresses_map.get(address_id)
+            );
+            updateFilter(filter_value);
+        }
+    });
 
     /**
      * @param {number} id
@@ -96,8 +105,9 @@
         switch (filter) {
             case 0:
                 streets.forEach(street => {
-                    street.addresses = addresses_store[address_index.indexOf(street.id)]
+                    street.addresses = addresses_street_map.get(street.id) || [];
                 });
+                filter_value = 0;
                 updateOrder(addresses_ascending);
                 break;
             case 1:
@@ -106,7 +116,7 @@
                         /**
                          * @type {any[]}
                          */
-                        let tmp_street_addresses = addresses_store[address_index.indexOf(street.id)]
+                        let tmp_street_addresses = addresses_street_map.get(street.id) || [];
                         let odd_addresses = tmp_street_addresses.filter(address => {
                             let number = parseInt(address.number)
                             return number % 2 === 1
@@ -114,6 +124,7 @@
                         street.addresses = odd_addresses;
                     }
                 });
+                filter_value = 1;
                 updateOrder(addresses_ascending);
                 break;
             case 2:
@@ -122,7 +133,7 @@
                         /**
                          * @type {any[]}
                          */
-                        let tmp_street_addresses = addresses_store[address_index.indexOf(street.id)]
+                        let tmp_street_addresses = addresses_street_map.get(street.id) || [];
                         let even_addresses = tmp_street_addresses.filter(address => {
                             let number = parseInt(address.number)
                             return number % 2 === 0
@@ -130,6 +141,7 @@
                         street.addresses = even_addresses;
                     }
                 });
+                filter_value = 2;
                 updateOrder(addresses_ascending);
                 break;
             default:
@@ -138,7 +150,7 @@
     }
 
     /**
-     * 
+     * Updates the order of addresses in each street.
      * @param {number} order
      */
     function updateOrder(order) {
@@ -326,7 +338,7 @@
                                     ><input
                                         type="checkbox"
                                         id={address.id.toString()}
-                                        checked={address.checked}
+                                        checked={address.visited}
                                         onclick={(e) =>
                                             updateCheckbox(
                                                 address.id,

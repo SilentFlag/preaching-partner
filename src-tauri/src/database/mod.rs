@@ -628,11 +628,7 @@ impl MyDatabase {
         Ok(())
     }
 
-    pub async fn update_address_checked(
-        &self,
-        id: u32,
-        checked: bool,
-    ) -> Result<(), DbError> {
+    pub async fn update_address_checked(&self, id: u32, checked: bool) -> Result<(), DbError> {
         let insert_token_query = sqlx::query("UPDATE addresses SET visited = ? WHERE id = ?")
             .bind(checked)
             .bind(id);
@@ -760,7 +756,6 @@ fn map_row_to_details(row: &SqliteRow) -> Result<MapDetails, sqlx::Error> {
 fn map_row_to_display_details(row: &SqliteRow) -> Result<MapDisplayDetails, sqlx::Error> {
     let id: u32 = row.try_get("id")?;
     let display_name: String = row.try_get("name")?;
-    let prefix: String = row.try_get("prefix")?;
     let file_name: String = row.try_get("file_name")?;
     let category: u32 = row.try_get("category")?;
     Ok(MapDisplayDetails {

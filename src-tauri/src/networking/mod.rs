@@ -9,7 +9,8 @@ use core::panic;
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
+use tokio;
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -20,7 +21,7 @@ pub async fn connect_to_server(
     mut request_rx: mpsc::Receiver<WsRequest>,
     _event_tx: broadcast::Sender<WsEvent>,
     db: MyDatabase, // DB functions must not be called directly, instead they should be called through the services module, this is to ensure that all database interactions are properly authenticated, logged and handled
-    _app_handle: AppHandle,
+    app: AppHandle,
 ) {
     // Create Connection
     let url = String::from("ws://127.0.0.1:9001/ws");
@@ -49,7 +50,7 @@ pub async fn connect_to_server(
         let msg: ClientMessage = ClientMessage {
             // form message to send
             id: 0,
-            access_token: access_token,
+            access_token,
             payload: ClientPayload::RequestSync(0),
         };
 
@@ -68,7 +69,7 @@ pub async fn connect_to_server(
                 // handle io messages
                 Some(req) = request_rx.recv() => {
 
-                    let client_payload: FrontEndPayload = req.payload.into(); // extract payload
+                    let client_payload: FrontEndPayload = req.payload; // extract payload
 
                     // Check for perms to do action
                     match client_payload {
@@ -81,7 +82,7 @@ pub async fn connect_to_server(
 
                             let msg: ClientMessage = ClientMessage { // form message to send
                                 id: current_id,
-                                access_token: access_token,
+                                access_token,
                                 payload: message,
                             };
                             // TODO: where does the new_token come from?
@@ -151,7 +152,7 @@ pub async fn connect_to_server(
                         FrontEndPayload::CompleteAddress{id, checked} => {
                             let msg: ClientMessage = ClientMessage {
                                 id: current_id,
-                                access_token: access_token,
+                                access_token,
                                 payload: ClientPayload::CompleteAddress{id, checked},
                             };
                             let send_result: Result<Option<[u8; 32]>, _> = sender.send(msg, refresh_token, db.clone()).await;
@@ -204,6 +205,17 @@ pub async fn connect_to_server(
                                             }
                                             ServerPayload::AddressCompleted{id, checked} => {
                                                 let result = services::check_address(db.clone(), id, checked).await;
+                                                // TODO: send message to frontend to check box
+                                                let address_completed_msg = (id, checked);
+
+                                                let emission_result = app.emit("complete_address", address_completed_msg).map_err(|e| e.to_string());
+                                                if let Err(error) = emission_result {
+                                                    println!(
+                                                        "There was an error sending a message to the frontend: {}",
+                                                        error
+                                                    );
+                                                }
+
                                                 if let Err(_error) = result {
                                                     // TODO: handle error
                                                 }

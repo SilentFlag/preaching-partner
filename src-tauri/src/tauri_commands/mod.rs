@@ -78,6 +78,7 @@ pub async fn get_maps(app: AppHandle, state: State<'_, WsState>) -> Result<(), S
 
     let emission_result = app.emit("maps", maps).map_err(|e| e.to_string());
     if let Err(error) = emission_result {
+        // TODO: handle error
         println!(
             "There was an error sending a message to the frontend: {}",
             error
